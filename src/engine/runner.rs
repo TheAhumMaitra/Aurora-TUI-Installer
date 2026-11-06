@@ -391,12 +391,28 @@ fn execute_single_step(
                 Ok(())
             })
         }
+        "arch_network_manager" => {
+            runner.log_info("Configuring NetworkManager and disabling competing network services...");
+            let competing_services = [
+                "iwd.service",
+                "systemd-networkd.service",
+                "systemd-networkd-wait-online.service",
+                "connman.service",
+                "dhcpcd.service",
+                "wicd.service",
+            ];
+            for service in competing_services {
+                let _ = runner.run_command("sudo", &["systemctl", "disable", "--now", service]);
+            }
+            runner.run_command("sudo", &["systemctl", "enable", "--now", "NetworkManager.service"]).or_else(|_| Ok(()))
+        }
         "arch_sddm" => {
             use crate::model::config::DisplayManagerChoice;
             match config.display_manager {
                 DisplayManagerChoice::SddmAstronaut => {
                     runner.log_info("Setting up SDDM Astronaut Theme...");
                     let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "sddm"]);
+                    let _ = runner.run_command("sudo", &["mkdir", "-p", "/usr/share/sddm/themes", "/usr/share/fonts", "/etc/sddm.conf.d"]);
                     let _ = runner.run_command(
                         "sudo",
                         &[
@@ -410,6 +426,12 @@ fn execute_single_step(
                             "/usr/share/sddm/themes/sddm-astronaut-theme",
                         ],
                     );
+                    let _ = runner.run_command("sudo", &["cp", "-rf", "/usr/share/sddm/themes/sddm-astronaut-theme/Fonts/.", "/usr/share/fonts/"]);
+                    let _ = runner.run_command("sudo", &["fc-cache", "-f", "/usr/share/fonts"]);
+                    if !runner.dry_run {
+                        let _ = fs::write("/etc/sddm.conf", "[Theme]\nCurrent=sddm-astronaut-theme\n");
+                        let _ = fs::write("/etc/sddm.conf.d/virtualkbd.conf", "[General]\nInputMethod=qtvirtualkeyboard\n");
+                    }
                     runner.run_command("sudo", &["systemctl", "enable", "sddm.service"]).or_else(|_| Ok(()))
                 }
                 DisplayManagerChoice::LyMatrix => {
@@ -502,8 +524,31 @@ env = GBM_BACKEND,nvidia-drm\n";
         }
 
         // --- FEDORA STEPS ---
+        "fedora_backup" => {
+            if let Some(home) = dirs_home() {
+                let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                let backup_dir = home.join(format!(".config/aurora_backups/backup_{ts}"));
+                runner.log_info(format!("Archiving existing dotfiles to {}...", backup_dir.display()));
+                if !runner.dry_run {
+                    let _ = fs::create_dir_all(&backup_dir);
+                    let config_dir = home.join(".config");
+                    for app in ["hypr", "waybar", "kitty", "ghostty", "rofi", "swaync", "wlogout"] {
+                        let target = config_dir.join(app);
+                        if target.exists() {
+                            let dest = backup_dir.join(app);
+                            let _ = runner.run_command("cp", &["-r", target.to_str().unwrap(), dest.to_str().unwrap()]);
+                        }
+                    }
+                }
+                runner.log_success(format!("Backup completed: {}", backup_dir.display()));
+            }
+            Ok(())
+        }
         "fedora_preflight" => {
             runner.log_info("Checking system requirements for Fedora Linux...");
+            if !runner.dry_run && !Path::new("/etc/os-release").exists() {
+                return Err("Fedora Linux check failed: /etc/os-release not found".to_string());
+            }
             runner.log_success("Fedora environment verified");
             Ok(())
         }
@@ -512,12 +557,16 @@ env = GBM_BACKEND,nvidia-drm\n";
             for copr in fedora::FEDORA_COPR_REPOS {
                 let _ = runner.run_command("sudo", &["dnf", "copr", "enable", "-y", copr]);
             }
+            runner.log_success("Fedora COPR repositories enabled");
             Ok(())
         }
         "fedora_packages" => {
             runner.log_info("Installing Fedora packages via DNF...");
             let mut pkgs: Vec<&str> = Vec::new();
-            pkgs.extend_from_slice(fedora::DNF_CORE);
+            match config.mode {
+                InstallMode::Stable => pkgs.extend_from_slice(fedora::DNF_CORE),
+                InstallMode::Git => pkgs.extend_from_slice(fedora::DNF_CORE_GIT),
+            }
             pkgs.extend_from_slice(fedora::DNF_DAEMONS);
             pkgs.extend_from_slice(fedora::DNF_UI);
             pkgs.extend_from_slice(fedora::DNF_UTILS);
@@ -535,24 +584,36 @@ env = GBM_BACKEND,nvidia-drm\n";
 
             pkgs.retain(|&pkg| config.is_package_enabled(pkg));
 
+            if pkgs.is_empty() {
+                runner.log_info("No DNF packages selected, skipping package installation.");
+                return Ok(());
+            }
+
             let mut args = vec!["dnf", "install", "-y"];
             args.extend(pkgs);
-            runner.run_command("sudo", &args)
-        }
-        "fedora_source_tools" => {
-            runner.log_info("Building Fedora desktop addons (Nordzy cursors, hyprwave)...");
-            let _ = runner.run_command("git", &["clone", "https://github.com/alvatip/Nordzy-cursors.git", "/tmp/nordzy-cursors"]);
-            let _ = runner.run_command("sh", &["-c", "cd /tmp/nordzy-cursors && ./install.sh -p"]);
+            let res = runner.run_command("sudo", &args);
+            if res.is_err() {
+                runner.log_warn("Some DNF packages failed to install, proceeding with fallback repositories");
+            }
             Ok(())
         }
-        "fedora_gaming" => {
-            runner.log_info("Installing Steam, GameMode, and MangoHud on Fedora...");
-            let mut args = vec!["dnf", "install", "-y"];
-            args.extend_from_slice(fedora::FEDORA_GAMING_PACKAGES);
-            runner.run_command("sudo", &args).or_else(|_| Ok(()))
+        "fedora_network_manager" => {
+            runner.log_info("Configuring NetworkManager and disabling competing network services...");
+            let competing_services = [
+                "systemd-networkd.service",
+                "systemd-networkd-wait-online.service",
+                "connman.service",
+                "dhcpcd.service",
+                "wicd.service",
+            ];
+            for service in competing_services {
+                let _ = runner.run_command("sudo", &["systemctl", "disable", "--now", service]);
+            }
+            runner.run_command("sudo", &["systemctl", "enable", "--now", "NetworkManager.service"]).or_else(|_| Ok(()))
         }
         "fedora_sddm" => {
             runner.log_info("Configuring SDDM Astronaut Theme for Fedora...");
+            let theme_dir = "/usr/share/sddm/themes/sddm-astronaut-theme";
             let _ = runner.run_command(
                 "sudo",
                 &[
@@ -563,11 +624,50 @@ env = GBM_BACKEND,nvidia-drm\n";
                     "--depth",
                     "1",
                     "https://github.com/keyitdev/sddm-astronaut-theme.git",
-                    "/usr/share/sddm/themes/sddm-astronaut-theme",
+                    theme_dir,
                 ],
             );
-            let _ = runner.run_command("sudo", &["systemctl", "disable", "--now", "gdm.service"]);
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/usr/share/fonts"]);
+            let _ = runner.run_command("sudo", &["cp", "-rf", "/usr/share/sddm/themes/sddm-astronaut-theme/Fonts/.", "/usr/share/fonts/"]);
+            let _ = runner.run_command("sudo", &["fc-cache", "-f", "/usr/share/fonts"]);
+
+            if !runner.dry_run {
+                let _ = fs::create_dir_all("/etc/sddm.conf.d");
+                let _ = fs::write("/etc/sddm.conf.d/theme.conf", "[Theme]\nCurrent=sddm-astronaut-theme\n");
+                let _ = fs::write("/etc/sddm.conf.d/virtualkbd.conf", "[General]\nInputMethod=qtvirtualkeyboard\n");
+            }
+
+            // Disable competing display managers
+            for dm in ["gdm.service", "gdm3.service", "lightdm.service", "lxdm.service", "greetd.service", "ly.service"] {
+                let _ = runner.run_command("sudo", &["systemctl", "disable", dm]);
+            }
             let _ = runner.run_command("sudo", &["systemctl", "enable", "sddm.service"]);
+            runner.log_success("SDDM astronaut theme configured and enabled");
+            Ok(())
+        }
+        "fedora_source_tools" => {
+            runner.log_info("Building Fedora desktop addons (hyprwave, Nordzy cursors, rofi-emoji, snappy-switcher)...");
+            // 1. hyprwave
+            runner.log_info("Building hyprwave from source...");
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/shantanubaddar/hyprwave.git", "/tmp/hyprwave"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/hyprwave && make && make install"]);
+
+            // 2. Nordzy cursors
+            runner.log_info("Installing Nordzy cursors...");
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://gitlab.com/gboehm/Nordzy-cursors.git", "/tmp/nordzy-cursors"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/nordzy-cursors && ./install.sh -p"]);
+
+            // 3. rofi-emoji
+            runner.log_info("Building rofi-emoji plugin from source...");
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/Mange/rofi-emoji.git", "/tmp/rofi-emoji"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/rofi-emoji && autoreconf -i && mkdir -p build && cd build && ../configure && make && sudo make install"]);
+
+            // 4. snappy-switcher
+            runner.log_info("Building snappy-switcher from source...");
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/OpalAayan/snappy-switcher.git", "/tmp/snappy-switcher"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/snappy-switcher && make && sudo make install"]);
+
+            runner.log_success("Fedora desktop addons installed");
             Ok(())
         }
         "fedora_rust_scripts" => {
@@ -576,14 +676,42 @@ env = GBM_BACKEND,nvidia-drm\n";
             if scripts_dir.join("Cargo.toml").exists() {
                 let _ = runner.run_command("cargo", &["install", "--path", scripts_dir.to_str().unwrap_or(".")]);
             }
-            let _ = runner.run_command("cargo", &["install", "termflix"]);
-            let _ = runner.run_command("cargo", &["install", "nmrs-tui"]);
+            runner.log_info("Installing mise runtime manager...");
+            let _ = runner.run_command("sh", &["-c", "curl -fsSL https://mise.run | sh"]);
+
+            runner.log_info("Installing Rust terminal tools...");
+            for crate_name in ["termflix", "nmrs-tui", "bluetui", "leenfetch", "weathr", "wiremix", "jolt-tui"] {
+                let _ = runner.run_command("cargo", &["install", crate_name]);
+            }
+            runner.log_success("Aurora Rust scripts and CLI packages installed");
             Ok(())
         }
         "fedora_waytrogen" => {
             runner.log_info("Building waytrogen-aurora on Fedora...");
             let _ = runner.run_command("git", &["clone", "https://github.com/TheAhumMaitra/waytrogen-aurora.git", "/tmp/waytrogen-aurora"]);
-            let _ = runner.run_command("sh", &["-c", "cd /tmp/waytrogen-aurora && cargo build --release && cp target/release/waytrogen $HOME/.local/bin/"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/waytrogen-aurora && cargo install --path . --locked"]);
+            if let Some(home) = dirs_home() {
+                let schema_dir = home.join(".local/share/glib-2.0/schemas");
+                if !runner.dry_run {
+                    let _ = fs::create_dir_all(&schema_dir);
+                }
+                let _ = runner.run_command("cp", &["-f", "/tmp/waytrogen-aurora/org.Waytrogen.Waytrogen.gschema.xml", schema_dir.to_str().unwrap()]);
+                let _ = runner.run_command("glib-compile-schemas", &[schema_dir.to_str().unwrap()]);
+            }
+            runner.log_success("waytrogen-aurora deployed");
+            Ok(())
+        }
+        "fedora_gaming" => {
+            runner.log_info("Installing Steam, GameMode, and MangoHud on Fedora...");
+            let mut args = vec!["dnf", "install", "-y"];
+            args.extend_from_slice(fedora::FEDORA_GAMING_PACKAGES);
+            runner.run_command("sudo", &args).or_else(|_| Ok(()))
+        }
+        "fedora_browser" => {
+            if let Some(pkg) = config.browser_choice.package_name() {
+                runner.log_info(format!("Installing default browser: {} ({})", config.browser_choice.short_name(), pkg));
+                let _ = runner.run_command("sudo", &["dnf", "install", "-y", pkg]);
+            }
             Ok(())
         }
         "fedora_lazyvim" => {
@@ -594,7 +722,10 @@ env = GBM_BACKEND,nvidia-drm\n";
         }
         "fedora_shell" => {
             runner.log_info("Setting default shell to Fish and updating PATH...");
-            let _ = runner.run_command("chsh", &["-s", "/usr/bin/fish"]);
+            if which::which("fish").is_ok() {
+                let fish_path = which::which("fish").unwrap().display().to_string();
+                let _ = runner.run_command("chsh", &["-s", &fish_path]);
+            }
             configure_shell_env(runner)
         }
         "fedora_sudo_rs" => {
@@ -605,60 +736,187 @@ env = GBM_BACKEND,nvidia-drm\n";
         }
 
         // --- NIXOS STEPS ---
+        "nixos_backup" => {
+            if let Some(home) = dirs_home() {
+                let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                let backup_dir = home.join(format!(".config/aurora_backups/backup_{ts}"));
+                runner.log_info(format!("Archiving existing dotfiles to {}...", backup_dir.display()));
+                if !runner.dry_run {
+                    let _ = fs::create_dir_all(&backup_dir);
+                    let config_dir = home.join(".config");
+                    for app in ["hypr", "waybar", "kitty", "ghostty", "rofi", "swaync", "wlogout"] {
+                        let target = config_dir.join(app);
+                        if target.exists() {
+                            let dest = backup_dir.join(app);
+                            let _ = runner.run_command("cp", &["-r", target.to_str().unwrap(), dest.to_str().unwrap()]);
+                        }
+                    }
+                }
+                runner.log_success(format!("Backup completed: {}", backup_dir.display()));
+            }
+            Ok(())
+        }
         "nixos_preflight" => {
-            runner.log_info("Checking Nix Flakes support...");
+            runner.log_info("Checking Nix Flakes support and NixOS environment...");
             runner.run_command("sudo", &["nix", "config", "set", "experimental-features", "nix-command flakes"])
         }
         "nixos_copy_config" => {
             runner.log_info("Deploying NixOS Flake configuration files to /etc/nixos...");
             let nix_dir = Path::new("/etc/nixos");
-            let source_nix = if config.source_dir.join("flake.nix").exists() {
-                config.source_dir.clone()
-            } else if let Some(home) = dirs_home() {
-                home.join("Documents/Aurora-NixOS")
+            let mut search_paths = vec![
+                config.source_dir.clone(),
+                PathBuf::from("."),
+            ];
+            if let Some(home) = dirs_home() {
+                search_paths.push(home.join("Aurora"));
+                search_paths.push(home.join("Documents/Aurora-NixOS"));
+                search_paths.push(home.join("Documents/Aurora"));
+                search_paths.push(home.join(".local/share/Aurora/source"));
+            }
+
+            let mut found_source = None;
+            for p in &search_paths {
+                if p.join("flake.nix").exists() {
+                    found_source = Some(p.clone());
+                    break;
+                }
+            }
+
+            let source_nix = if let Some(src) = found_source {
+                src
             } else {
-                PathBuf::from(".")
+                let clone_target = if let Some(home) = dirs_home() {
+                    home.join(".local/share/Aurora/Aurora-NixOS")
+                } else {
+                    PathBuf::from("/tmp/Aurora-NixOS")
+                };
+                if !clone_target.join("flake.nix").exists() && !runner.dry_run {
+                    runner.log_info("Fetching Aurora-NixOS flake configurations from GitHub...");
+                    let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/TheAhumMaitra/Aurora-NixOS.git", clone_target.to_str().unwrap_or("")]);
+                }
+                if clone_target.join("flake.nix").exists() {
+                    clone_target
+                } else {
+                    PathBuf::from("/etc/nixos")
+                }
             };
+            runner.log_info(format!("Using NixOS source from: {}", source_nix.display()));
+
+            if let Some(home) = dirs_home() {
+                let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                let nix_backup = home.join(format!(".local/share/Aurora/nixos_backup_{ts}"));
+                let _ = runner.run_command("sudo", &["mkdir", "-p", nix_backup.to_str().unwrap()]);
+            }
+
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/etc/nixos"]);
 
             for file in nixos::NIXOS_CONFIG_FILES {
                 let src = source_nix.join(file);
                 let dst = nix_dir.join(file);
                 if src.exists() {
-                    runner.run_command("sudo", &["cp", "-f", src.to_str().unwrap_or(""), dst.to_str().unwrap_or("")])?;
+                    let _ = runner.run_command("sudo", &["cp", "-f", src.to_str().unwrap_or(""), dst.to_str().unwrap_or("")]);
+                    let _ = runner.run_command("sudo", &["chmod", "644", dst.to_str().unwrap_or("")]);
                 }
             }
+            runner.log_success("NixOS configuration files deployed to /etc/nixos");
             Ok(())
         }
         "nixos_rebuild_switch" => {
-            runner.log_info("Running nixos-rebuild switch...");
+            runner.log_info("Running 'sudo nixos-rebuild switch --flake /etc/nixos#nixos'...");
             runner.run_command("sudo", &["nixos-rebuild", "switch", "--flake", "/etc/nixos#nixos"])
         }
         "nixos_dotfiles" => {
             deploy_dotfiles(config, runner)
         }
         "nixos_rust_scripts" => {
+            runner.log_info("Setting Rust stable toolchain...");
+            let _ = runner.run_command("rustup", &["default", "stable"]).or_else(|_| {
+                runner.run_command("nix", &["develop", "/etc/nixos", "-c", "rustup", "default", "stable"])
+            });
+
             runner.log_info("Building Aurora Rust scripts inside Nix develop shell...");
-            runner.run_command("nix", &["develop", "/etc/nixos", "-c", "cargo", "install", "--path", "."]).or_else(|_| Ok(()))
+            let scripts_dir = config.source_dir.join("dotfiles/.config/hypr/scripts");
+            if scripts_dir.join("Cargo.toml").exists() {
+                let _ = runner.run_command("sh", &["-c", &format!("cd {} && nix develop /etc/nixos -c cargo install --path .", scripts_dir.display())]);
+            }
+            runner.log_info("Installing Rust tools inside Nix develop shell...");
+            for pkg in ["termflix", "nmrs-tui", "leenfetch", "jolt-tui", "bluetui", "weathr"] {
+                let _ = runner.run_command("nix", &["develop", "/etc/nixos", "-c", "cargo", "install", pkg]);
+            }
+            runner.log_success("Aurora Rust scripts and tools compiled");
+            Ok(())
         }
         "nixos_sddm" => {
-            runner.log_info("Deploying SDDM astronaut theme assets...");
+            runner.log_info("Deploying SDDM astronaut theme assets on NixOS...");
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/usr/share/sddm/themes", "/usr/share/fonts"]);
             let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/keyitdev/sddm-astronaut-theme.git", "/tmp/sddm-astronaut"]);
+            let _ = runner.run_command("sudo", &["cp", "-rf", "/tmp/sddm-astronaut", "/usr/share/sddm/themes/sddm-astronaut-theme"]);
+            let _ = runner.run_command("sudo", &["cp", "-rf", "/tmp/sddm-astronaut/Fonts/.", "/usr/share/fonts/"]);
+
+            if !runner.dry_run {
+                let _ = fs::write("/etc/sddm.conf", "[Theme]\nCurrent=sddm-astronaut-theme\n");
+                let _ = fs::create_dir_all("/etc/sddm.conf.d");
+                let _ = fs::write("/etc/sddm.conf.d/virtualkbd.conf", "[General]\nInputMethod=qtvirtualkeyboard\n");
+            }
+            runner.log_success("SDDM astronaut theme deployed");
             Ok(())
         }
         "nixos_waytrogen" => {
-            runner.log_info("Building waytrogen-aurora in dev shell...");
+            runner.log_info("Building waytrogen-aurora in Nix develop shell...");
             let _ = runner.run_command("git", &["clone", "https://github.com/TheAhumMaitra/waytrogen-aurora.git", "/tmp/waytrogen-aurora"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/waytrogen-aurora && nix develop /etc/nixos -c cargo install --path . --locked"]);
+            if let Some(home) = dirs_home() {
+                let schema_dir = home.join(".local/share/glib-2.0/schemas");
+                if !runner.dry_run {
+                    let _ = fs::create_dir_all(&schema_dir);
+                }
+                let _ = runner.run_command("cp", &["-f", "/tmp/waytrogen-aurora/org.Waytrogen.Waytrogen.gschema.xml", schema_dir.to_str().unwrap()]);
+                let _ = runner.run_command("glib-compile-schemas", &[schema_dir.to_str().unwrap()]);
+            }
+            runner.log_success("waytrogen-aurora installed");
             Ok(())
         }
         "nixos_extras" => {
-            runner.log_info("Installing Mise, Nordzy Cursors and Zen Browser Flatpak...");
+            runner.log_info("Installing mise, Nordzy Cursors and Zen Browser Flatpak...");
+            // 1. mise
             let _ = runner.run_command("sh", &["-c", "curl -fsSL https://mise.run | sh"]);
+
+            // 2. Nordzy cursors
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://gitlab.com/gboehm/Nordzy-cursors.git", "/tmp/nordzy-cursors"]);
+            let _ = runner.run_command("sh", &["-c", "cd /tmp/nordzy-cursors && ./install.sh -P"]);
+
+            // 3. Zen Browser via flatpak
             let _ = runner.run_command("flatpak", &["remote-add", "--if-not-exists", "flathub", "https://dl.flathub.org/repo/flathub.flatpakrepo"]);
-            let _ = runner.run_command("flatpak", &["install", "-y", "flathub", "app.zen_browser.zen"]);
+            let _ = runner.run_command("flatpak", &["install", "-y", "--noninteractive", "flathub", "app.zen_browser.zen"]);
+
+            // Add zen-browser alias to shell configurations
+            if let Some(home) = dirs_home() {
+                let posix_alias = "\nalias zen-browser=\"flatpak run app.zen_browser.zen\"\n";
+                let fish_alias = "\nalias zen-browser \"flatpak run app.zen_browser.zen\"\n";
+                for rc in [home.join(".bashrc"), home.join(".zshrc")] {
+                    if rc.exists() {
+                        let mut content = fs::read_to_string(&rc).unwrap_or_default();
+                        if !content.contains("alias zen-browser") {
+                            content.push_str(posix_alias);
+                            let _ = fs::write(&rc, content);
+                        }
+                    }
+                }
+                let fish_cfg = home.join(".config/fish/config.fish");
+                if fish_cfg.exists() {
+                    let mut content = fs::read_to_string(&fish_cfg).unwrap_or_default();
+                    if !content.contains("alias zen-browser") {
+                        content.push_str(fish_alias);
+                        let _ = fs::write(&fish_cfg, content);
+                    }
+                }
+            }
+            runner.log_success("Mise, Nordzy cursors, and Zen Browser configured");
             Ok(())
         }
         "nixos_gaming" => {
             runner.log_info("Configuring Gaming options for NixOS...");
+            runner.log_success("Gaming packages configured (ensure programs.steam.enable is active in configuration.nix)");
             Ok(())
         }
         "nixos_lazyvim" => {
@@ -711,15 +969,20 @@ fn deploy_neovim_preset(config: &InstallConfig, runner: &StepRunner) -> Result<(
 
 fn deploy_dotfiles(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
     runner.log_info("Deploying Aurora dotfiles...");
-    let src_dotfiles = config.source_dir.join("dotfiles/.config");
-    if !src_dotfiles.exists() && !runner.dry_run {
-        runner.log_warn(format!("Source dotfiles not found at {}. Cloning Aurora repository...", src_dotfiles.display()));
+    let mut effective_src = config.source_dir.join("dotfiles/.config");
+    if !effective_src.exists() && !runner.dry_run {
+        runner.log_warn(format!("Source dotfiles not found at {}. Cloning Aurora repository...", effective_src.display()));
         let clone_dst = if let Some(home) = dirs_home() {
             home.join(".local/share/Aurora/source")
         } else {
             PathBuf::from("/tmp/Aurora")
         };
-        let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/TheAhumMaitra/Aurora.git", clone_dst.to_str().unwrap_or("")]);
+        if !clone_dst.join("dotfiles/.config").exists() {
+            let _ = runner.run_command("git", &["clone", "--depth", "1", "https://github.com/TheAhumMaitra/Aurora.git", clone_dst.to_str().unwrap_or("")]);
+        }
+        if clone_dst.join("dotfiles/.config").exists() {
+            effective_src = clone_dst.join("dotfiles/.config");
+        }
     }
 
     if let Some(home) = dirs_home() {
@@ -731,7 +994,7 @@ fn deploy_dotfiles(config: &InstallConfig, runner: &StepRunner) -> Result<(), St
 
         // Copy dotfiles while preserving ~/.config/hypr/User
         runner.log_info("Copying configuration files (preserving ~/.config/hypr/User)...");
-        if !runner.dry_run && src_dotfiles.exists() {
+        if !runner.dry_run && effective_src.exists() {
             let user_hypr_dir = dest_config.join("hypr/User");
             let mut user_backup_tmp = None;
             if user_hypr_dir.exists() {
@@ -741,7 +1004,7 @@ fn deploy_dotfiles(config: &InstallConfig, runner: &StepRunner) -> Result<(), St
             }
 
             // Copy src items
-            let _ = runner.run_command("cp", &["-rf", &format!("{}/.", src_dotfiles.display()), &dest_config.display().to_string()]);
+            let _ = runner.run_command("cp", &["-rf", &format!("{}/.", effective_src.display()), &dest_config.display().to_string()]);
 
             // Restore user hypr dir
             if let Some(tmp) = user_backup_tmp {
@@ -762,7 +1025,7 @@ fn configure_shell_env(runner: &StepRunner) -> Result<(), String> {
             let local_bin = home.join(".local/bin");
             let path_line = format!("\nexport PATH=\"{}:{}:$PATH\"\n", cargo_bin.display(), local_bin.display());
 
-            for rc in [home.join(".bashrc"), home.join(".zshrc")] {
+            for rc in [home.join(".bashrc"), home.join(".zshrc"), home.join(".bash_profile")] {
                 if rc.exists() {
                     let mut content = fs::read_to_string(&rc).unwrap_or_default();
                     if !content.contains(".cargo/bin") {
@@ -787,8 +1050,32 @@ fn configure_shell_env(runner: &StepRunner) -> Result<(), String> {
 
 fn setup_sudo_rs(runner: &StepRunner) -> Result<(), String> {
     runner.log_info("Configuring sudo-rs memory-safe replacement...");
-    if which::which("sudo-rs").is_ok() || runner.dry_run {
-        runner.run_command("sudo", &["ln", "-sf", "/usr/bin/sudo-rs", "/usr/bin/sudo"]).or_else(|_| Ok(()))
+    if runner.dry_run {
+        runner.log_warn("[DRY-RUN] Would atomically replace /usr/bin/sudo with symlink to /usr/bin/sudo-rs");
+        return Ok(());
+    }
+
+    if which::which("sudo-rs").is_ok() || Path::new("/usr/bin/sudo-rs").exists() {
+        let script = r#"
+        set -e
+        if [ ! -x /usr/bin/sudo-rs ]; then
+            echo "sudo-rs binary missing at /usr/bin/sudo-rs" >&2
+            exit 1
+        fi
+        if [ -L /usr/bin/sudo ] && [ "$(readlink /usr/bin/sudo)" = "/usr/bin/sudo-rs" ]; then
+            exit 0
+        fi
+        if [ ! -e /usr/bin/sudo-original ]; then
+            if [ -e /usr/bin/sudo ] || [ -L /usr/bin/sudo ]; then
+                mv /usr/bin/sudo /usr/bin/sudo-original
+            fi
+        fi
+        rm -f /usr/bin/sudo
+        ln -sf /usr/bin/sudo-rs /usr/bin/sudo
+        "#;
+        let _ = runner.run_command("sudo", &["sh", "-c", script]);
+        runner.log_success("Switched /usr/bin/sudo to /usr/bin/sudo-rs");
+        Ok(())
     } else {
         runner.log_warn("sudo-rs binary not found in PATH; skipping symlink");
         Ok(())
@@ -797,15 +1084,24 @@ fn setup_sudo_rs(runner: &StepRunner) -> Result<(), String> {
 
 fn apply_theme(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
     runner.log_info(format!("Applying theme: '{}'...", config.theme_name));
+
+    if which::which("awww-daemon").is_ok() || runner.dry_run {
+        let _ = runner.run_command("sh", &["-c", "awww-daemon >/dev/null 2>&1 &"]);
+    }
+
     let aurora_bin = which::which("aurora").ok().or_else(|| {
         dirs_home().map(|h| h.join(".cargo/bin/aurora")).filter(|p| p.exists())
     });
 
     if let Some(bin) = aurora_bin {
-        runner.run_command(bin.to_str().unwrap_or("aurora"), &["apply-theme", &config.theme_name]).or_else(|e| {
+        let res = runner.run_command(bin.to_str().unwrap_or("aurora"), &["apply-theme", &config.theme_name]);
+        if let Err(e) = res {
             runner.log_warn(format!("Could not apply theme automatically: {e}"));
-            Ok(())
-        })
+        } else {
+            let _ = runner.run_command("pkill", &["-f", "waybar"]);
+            runner.log_success(format!("Theme '{}' applied successfully", config.theme_name));
+        }
+        Ok(())
     } else {
         runner.log_warn("Aurora CLI binary not yet in PATH; apply theme later with 'aurora apply-theme <name>'");
         Ok(())

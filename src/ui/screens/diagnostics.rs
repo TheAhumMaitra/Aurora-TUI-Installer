@@ -68,7 +68,11 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
     let specs_lines = vec![
         Line::from(vec![
             Span::styled("OS Distribution:   ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(&info.arch_flavor, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+            Span::styled(&info.distro_flavor, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("Target Family:     ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(format!("{} (Package Mgr: {})", state.selected_distro.label(), state.selected_distro.package_manager()), Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
             Span::styled("Linux Kernel:      ", Style::default().fg(COLOR_CYAN)),
@@ -127,10 +131,10 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         ])
     };
 
-    if info.is_arch_compatible {
-        check_lines.push(pass("Arch-based Linux distribution verified"));
+    if info.is_compatible {
+        check_lines.push(pass(&format!("{} verified compatible", info.distro_flavor)));
     } else {
-        check_lines.push(warn("Non-Arch Linux system (Manual dependencies required)"));
+        check_lines.push(warn("Non-standard Linux system (target distro forced)"));
     }
 
     if !info.is_root {
@@ -151,16 +155,43 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         check_lines.push(warn("Disk space low (< 15.0 GB free)"));
     }
 
-    if info.pacman_available {
-        check_lines.push(pass("Official Arch pacman package manager active"));
-    } else {
-        check_lines.push(warn("pacman binary missing or not in PATH"));
-    }
+    match state.selected_distro {
+        crate::distro::DistroFamily::Arch => {
+            if info.pacman_available {
+                check_lines.push(pass("Official Arch pacman package manager active"));
+            } else {
+                check_lines.push(warn("pacman binary missing or not in PATH"));
+            }
 
-    if let Some(ref helper) = info.aur_helper {
-        check_lines.push(pass(&format!("AUR helper available ({helper})")));
-    } else {
-        check_lines.push(pass("AUR helper will be automatically bootstrapped (yay-bin)"));
+            if let Some(ref helper) = info.aur_helper {
+                check_lines.push(pass(&format!("AUR helper available ({helper})")));
+            } else {
+                check_lines.push(pass("AUR helper will be automatically bootstrapped (yay-bin)"));
+            }
+        }
+        crate::distro::DistroFamily::Fedora => {
+            if info.dnf_available {
+                check_lines.push(pass("Fedora DNF package manager active"));
+            } else {
+                check_lines.push(warn("dnf binary missing or not in PATH"));
+            }
+            check_lines.push(pass("COPR repositories will be enabled automatically"));
+        }
+        crate::distro::DistroFamily::NixOS => {
+            if info.nix_available {
+                check_lines.push(pass("Nix package manager toolchain active"));
+            } else {
+                check_lines.push(warn("nix binary missing or not in PATH"));
+            }
+            if info.nixos_rebuild_available {
+                check_lines.push(pass("nixos-rebuild utility detected"));
+            } else {
+                check_lines.push(warn("nixos-rebuild not found (will run if inside NixOS)"));
+            }
+        }
+        crate::distro::DistroFamily::Unknown => {
+            check_lines.push(warn("Unknown distribution family detected"));
+        }
     }
 
     if info.is_uefi {
@@ -187,7 +218,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
     f.render_widget(checklist_p, middle_chunks[1]);
 
     // 3. Verdict & Return Footer
-    let all_ok = info.is_arch_compatible && info.home_free_gb >= 5.0 && info.total_ram_gb >= 2.0;
+    let all_ok = info.is_compatible && info.home_free_gb >= 5.0 && info.total_ram_gb >= 2.0;
     let verdict_text = if all_ok {
         Span::styled(
             "  ● PREFLIGHT AUDIT: SYSTEM IS 100% READY FOR AURORA HYPRLAND INSTALLATION  ",

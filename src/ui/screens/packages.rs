@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::distro::arch::{package_category_badge, ARCH_PACKAGE_GROUPS};
 use crate::distro::DistroPackageGroup;
 use crate::model::state::AppState;
 use crate::ui::theme::*;
@@ -17,7 +16,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([Constraint::Percentage(36), Constraint::Percentage(64)])
         .split(area);
 
-    let groups = ARCH_PACKAGE_GROUPS;
+    let groups = state.selected_distro.package_groups();
 
     render_categories(f, state, groups, chunks[0]);
     render_packages(f, state, groups, chunks[1]);
@@ -97,9 +96,11 @@ fn badge_style(category: &str) -> Style {
         "UI" => Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
         "Utils" => Style::default().fg(COLOR_BLUE),
         "Build" => Style::default().fg(COLOR_MAGENTA),
-        "AUR" => Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+        "AUR" | "COPR" | "Flake" => Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+        "Source" => Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD),
         "Gaming" => Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD),
         "Font" => Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
+        "Extra" => Style::default().fg(COLOR_CYAN),
         _ => Style::default().fg(COLOR_DARK),
     }
 }
@@ -234,7 +235,7 @@ fn render_packages(
                 Style::default().fg(COLOR_DARK)
             };
 
-            let badge = package_category_badge(pkg);
+            let badge = state.selected_distro.package_badge(pkg);
             let b_style = badge_style(badge);
 
             lines.push(Line::from(vec![
@@ -258,7 +259,7 @@ fn render_packages(
     f.render_widget(p, chunks[1]);
 
     // 3. Bulk action bar
-    let all_pkgs = crate::distro::arch::all_arch_packages();
+    let all_pkgs = state.selected_distro.all_packages();
     let total_all = all_pkgs.len();
     let enabled_all = all_pkgs.iter().filter(|&&p| state.config.is_package_enabled(p)).count();
     let excluded_all = total_all.saturating_sub(enabled_all);

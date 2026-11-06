@@ -304,6 +304,11 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
             "Install Official Pacman Packages",
             mode_desc,
         ));
+        steps.push(InstallStep::new(
+            "arch_network_manager",
+            "Configure NetworkManager Service",
+            "Disable competing network daemons (iwd, systemd-networkd, connman) and ensure NetworkManager is primary",
+        ));
     }
 
     // 3. AUR helper & extra packages

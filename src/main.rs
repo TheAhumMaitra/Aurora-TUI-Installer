@@ -9,9 +9,9 @@ mod ui;
 
 use clap::Parser;
 use cli::{
-    AudioArg, BackupArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, FontArg, GpuArg,
-    LauncherArg, LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
-    WallpaperArg,
+    AudioArg, BackupArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, DistroArg, FontArg,
+    GpuArg, LauncherArg, LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg,
+    TweaksArg, WallpaperArg,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -183,14 +183,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Successfully exported Aurora installer profile to: {}", export_path.display());
         return Ok(());
     }
-    if let Some(explicit_pkgs) = args.packages {
-        let all = distro::arch::all_arch_packages();
-        config.disable_all_global(all);
-        config.preset = InstallPreset::Custom;
-        for pkg in explicit_pkgs {
-            config.enable_package(&pkg);
-        }
-    }
     if let Some(excluded) = args.exclude_packages {
         for pkg in excluded {
             config.disable_package(&pkg);
@@ -207,6 +199,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut state = AppState::new(distro_info, config);
+
+    // Apply distro override from CLI if specified
+    if let Some(distro_arg) = args.distro {
+        let family = match distro_arg {
+            DistroArg::Arch => distro::DistroFamily::Arch,
+            DistroArg::Fedora => distro::DistroFamily::Fedora,
+            DistroArg::NixOS => distro::DistroFamily::NixOS,
+        };
+        state.set_distro(family);
+    }
+
+    // Apply explicit package selection if specified
+    if let Some(explicit_pkgs) = args.packages {
+        let all = state.selected_distro.all_packages();
+        state.config.disable_all_global(all);
+        state.config.preset = InstallPreset::Custom;
+        for pkg in explicit_pkgs {
+            state.config.enable_package(&pkg);
+        }
+        state.refresh_steps();
+    }
 
     // Headless / non-interactive execution
     if args.non_interactive {
@@ -239,19 +252,22 @@ fn print_diagnostics_report(info: &DistroInfo) {
     println!("================================================================================");
     println!("             AURORA PREFLIGHT HARDWARE & SYSTEM DIAGNOSTICS                     ");
     println!("================================================================================");
-    println!("Operating System:    {}", info.arch_flavor);
+    println!("Operating System:    {}", info.distro_flavor);
+    println!("Distro Family:       {}", info.family.label());
     println!("Kernel Version:      {} ({})", info.kernel, info.arch);
     println!("Firmware Mode:       {}", if info.is_uefi { "UEFI Mode (Optimal)" } else { "Legacy BIOS" });
     println!("Processor (CPU):     {} ({} cores)", info.cpu_model, info.cpu_cores);
     println!("Memory (RAM):        {:.1} GB total ({:.1} GB available)", info.total_ram_gb, info.available_ram_gb);
     println!("Storage (/home):     {:.1} GB free space", info.home_free_gb);
     println!("Graphics Hardware:   {}", info.gpu.label());
-    println!("Package Manager:     {}", if info.pacman_available { "pacman (found)" } else { "none" });
-    println!("AUR Helper:          {}", info.aur_helper.as_deref().unwrap_or("none (will bootstrap yay)"));
+    println!("Package Manager:     {}", info.family.package_manager());
+    if info.family == distro::DistroFamily::Arch {
+        println!("AUR Helper:          {}", info.aur_helper.as_deref().unwrap_or("none (will bootstrap yay)"));
+    }
     println!("Session User:        {} (root: {})", info.current_user, info.is_root);
     println!("Wayland / Hyprland:  {}", if info.hyprland_running { "Hyprland session active" } else { "Ready for Wayland launch" });
     println!("--------------------------------------------------------------------------------");
-    let all_ok = info.is_arch_compatible && info.home_free_gb >= 5.0 && info.total_ram_gb >= 2.0;
+    let all_ok = info.is_compatible && info.home_free_gb >= 5.0 && info.total_ram_gb >= 2.0;
     if all_ok {
         println!("PREFLIGHT RESULT:    10/10 PASS - System is fully compatible with Aurora!");
     } else {
@@ -262,31 +278,30 @@ fn print_diagnostics_report(info: &DistroInfo) {
 
 fn run_headless(state: &mut AppState) {
     println!("=== Aurora Non-Interactive Installation ===");
-    println!("Detected System:     {}", state.distro_info.arch_flavor);
+    println!("Detected System:     {}", state.distro_info.distro_flavor);
+    println!("Target Distro:       {}", state.selected_distro.name());
     println!(
-        "Arch Compatibility:  {}",
-        if state.distro_info.is_arch_compatible {
-            "Compatible (Arch-based)"
+        "Distro Support:      {}",
+        if state.distro_info.is_compatible {
+            "Verified & Supported"
         } else {
-            "Incompatible (Non-Arch)"
+            "Incompatible / Unsupported"
         }
     );
     println!(
         "Package Manager:     {}",
-        if state.distro_info.pacman_available {
-            "pacman (found)"
-        } else {
-            "none"
-        }
+        state.selected_distro.package_manager()
     );
-    println!(
-        "AUR Helper:          {}",
-        state
-            .distro_info
-            .aur_helper
-            .as_deref()
-            .unwrap_or("none (will bootstrap yay)")
-    );
+    if state.selected_distro == distro::DistroFamily::Arch {
+        println!(
+            "AUR Helper:          {}",
+            state
+                .distro_info
+                .aur_helper
+                .as_deref()
+                .unwrap_or("none (will bootstrap yay)")
+        );
+    }
     println!("GPU Hardware:        {}", state.distro_info.gpu.label());
     println!("GPU Profile:         {}", state.config.gpu_profile.label());
     println!("Installation Mode:   {:?}", state.config.mode);
@@ -304,7 +319,7 @@ fn run_headless(state: &mut AppState) {
     println!("Kernel Tweaks:       {}", state.config.kernel_tweaks.label());
     println!("Shell Choice:        {}", state.config.shell_choice.label());
     println!("Theme:               {}", state.config.theme_name);
-    let all_pkgs = distro::arch::all_arch_packages();
+    let all_pkgs = state.selected_distro.all_packages();
     let enabled_count = all_pkgs.iter().filter(|&&p| state.config.is_package_enabled(p)).count();
     println!("Active Packages:     {}/{} selected", enabled_count, all_pkgs.len());
     println!("Dry Run:             {}", state.config.dry_run);
@@ -383,6 +398,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             KeyCode::Char('i') | KeyCode::Char('I') => {
                 state.current_screen = AppScreen::Diagnostics;
             }
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                state.cycle_distro();
+            }
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                 state.should_exit = true;
             }
@@ -422,7 +440,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.refresh_steps();
             }
             KeyCode::Char('x') | KeyCode::Char('X') => {
-                let all = distro::arch::all_arch_packages();
+                let all = state.selected_distro.all_packages();
                 state.config.disable_all_global(all);
                 state.refresh_steps();
             }
@@ -623,7 +641,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 return;
             }
 
-            let groups = distro::arch::ARCH_PACKAGE_GROUPS;
+            let groups = state.selected_distro.package_groups();
             let total_cats = groups.len();
 
             match code {
@@ -673,7 +691,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 }
                 // Global Deselect All packages (enables selecting certain packages from zero)
                 KeyCode::Char('x') | KeyCode::Char('X') => {
-                    let all = distro::arch::all_arch_packages();
+                    let all = state.selected_distro.all_packages();
                     state.config.disable_all_global(all);
                 }
                 // Category-level or Filtered Select All
@@ -696,7 +714,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 }
                 KeyCode::Char('N') => {
                     // Shift+N: Deselect ALL packages globally
-                    let all = distro::arch::all_arch_packages();
+                    let all = state.selected_distro.all_packages();
                     state.config.disable_all_global(all);
                 }
                 // Category or Filtered Invert
@@ -708,7 +726,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 }
                 KeyCode::Char('I') => {
                     // Shift+I: Invert ALL packages globally
-                    let all = distro::arch::all_arch_packages();
+                    let all = state.selected_distro.all_packages();
                     state.config.invert_all_global(all);
                 }
                 KeyCode::Esc => {

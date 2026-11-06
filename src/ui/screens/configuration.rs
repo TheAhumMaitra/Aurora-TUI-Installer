@@ -44,7 +44,7 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         default_block(" 1. Preset Profile ")
     };
 
-    let all_pkgs = crate::distro::arch::all_arch_packages();
+    let all_pkgs = state.selected_distro.all_packages();
     let total_pkgs = all_pkgs.len();
     let disabled_count = state.config.disabled_packages.len();
     let enabled_count = total_pkgs.saturating_sub(disabled_count);

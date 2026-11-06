@@ -178,20 +178,35 @@ pub enum BackupArg {
     SkipExisting,
 }
 
-/// Aurora TUI Installer tailored for Arch Linux and Arch-based distributions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum DistroArg {
+    #[value(name = "arch")]
+    Arch,
+    #[value(name = "fedora")]
+    Fedora,
+    #[value(name = "nixos")]
+    NixOS,
+}
+
+/// Aurora TUI Installer tailored for Arch Linux, Fedora, and NixOS
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "aurora-installer",
     author = "Ahum Maitra <theahummaitra@gmail.com>",
     version = "1.0.0",
-    about = "A minimal, elegant, Ratatui-based installer for Aurora (Arch Linux & Arch-based OS)",
+    about = "A minimal, elegant, Ratatui-based installer for Aurora (Arch Linux, Fedora, and NixOS)",
     long_about = "Aurora Installer provides a rich, responsive terminal user interface (TUI) \
                   built on Ratatui to configure and install the Aurora Hyprland rice. \
-                  Auto-detects Arch Linux and Arch-based distributions (CachyOS, EndeavourOS, \
-                  Manjaro, Garuda, Artix, ArcoLinux, Archcraft, SteamOS) and provides hardware \
-                  and distribution compatibility checks."
+                  Supports NixOS, Fedora and Fedora-based distributions (Fedora, Nobara, Bazzite, \
+                  Ultramarine, RHEL, CentOS), and Arch Linux and Arch-based distributions \
+                  (CachyOS, EndeavourOS, Manjaro, Garuda, Artix, ArcoLinux, Archcraft, SteamOS) \
+                  with multi-distro detection and preflight audits."
 )]
 pub struct CliArgs {
+    /// Override the detected target distribution family (arch, fedora, nixos)
+    #[arg(short = 'D', long = "distro", value_enum)]
+    pub distro: Option<DistroArg>,
+
     /// Preview actions and commands without applying any changes
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,

@@ -30,10 +30,14 @@ impl DistroFamily {
     pub fn name(&self) -> &'static str {
         match self {
             DistroFamily::Arch => "Arch Linux & Arch-based",
-            DistroFamily::Fedora => "Fedora Linux",
+            DistroFamily::Fedora => "Fedora Linux & Fedora-based",
             DistroFamily::NixOS => "NixOS",
             DistroFamily::Unknown => "Unsupported Linux",
         }
+    }
+
+    pub fn label(&self) -> &'static str {
+        self.name()
     }
 
     pub fn package_manager(&self) -> &'static str {
@@ -45,13 +49,57 @@ impl DistroFamily {
         }
     }
 
-    #[allow(dead_code)]
     pub fn icon(&self) -> &'static str {
         match self {
             DistroFamily::Arch => "󰣇",
             DistroFamily::Fedora => "",
             DistroFamily::NixOS => "",
             DistroFamily::Unknown => "󰌽",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            DistroFamily::Arch => DistroFamily::Fedora,
+            DistroFamily::Fedora => DistroFamily::NixOS,
+            DistroFamily::NixOS => DistroFamily::Arch,
+            DistroFamily::Unknown => DistroFamily::Arch,
+        }
+    }
+
+    pub fn package_groups(&self) -> &'static [DistroPackageGroup] {
+        match self {
+            DistroFamily::Arch => arch::ARCH_PACKAGE_GROUPS,
+            DistroFamily::Fedora => fedora::FEDORA_PACKAGE_GROUPS,
+            DistroFamily::NixOS => nixos::NIXOS_PACKAGE_GROUPS,
+            DistroFamily::Unknown => &[],
+        }
+    }
+
+    pub fn all_packages(&self) -> Vec<&'static str> {
+        match self {
+            DistroFamily::Arch => arch::all_arch_packages(),
+            DistroFamily::Fedora => fedora::all_fedora_packages(),
+            DistroFamily::NixOS => nixos::all_nixos_packages(),
+            DistroFamily::Unknown => Vec::new(),
+        }
+    }
+
+    pub fn package_badge(&self, pkg: &str) -> &'static str {
+        match self {
+            DistroFamily::Arch => arch::package_category_badge(pkg),
+            DistroFamily::Fedora => fedora::package_category_badge(pkg),
+            DistroFamily::NixOS => nixos::package_category_badge(pkg),
+            DistroFamily::Unknown => "Extra",
+        }
+    }
+
+    pub fn build_steps(&self, config: &crate::model::config::InstallConfig) -> Vec<crate::engine::step::InstallStep> {
+        match self {
+            DistroFamily::Arch => arch::build_steps(config),
+            DistroFamily::Fedora => fedora::build_steps(config),
+            DistroFamily::NixOS => nixos::build_steps(config),
+            DistroFamily::Unknown => Vec::new(),
         }
     }
 }
@@ -195,10 +243,18 @@ pub struct DistroInfo {
     pub id: String,
     pub pretty_name: String,
     pub id_like: Vec<String>,
+    pub is_compatible: bool,
     pub is_arch_compatible: bool,
+    pub is_fedora_compatible: bool,
+    pub is_nixos_compatible: bool,
+    pub distro_flavor: String,
     pub arch_flavor: String,
     pub aur_helper: Option<String>,
     pub pacman_available: bool,
+    pub dnf_available: bool,
+    pub nix_available: bool,
+    pub nixos_rebuild_available: bool,
+    pub flatpak_available: bool,
     pub kernel: String,
     pub arch: String,
     pub current_user: String,
@@ -217,23 +273,44 @@ pub struct DistroInfo {
 
 impl DistroInfo {
     pub fn detect() -> Self {
-        let (id, pretty_name, id_like) = read_os_release();
+        let (id, pretty_name, id_like, version_id) = read_os_release();
 
-        let is_arch = is_arch_family(&id, &id_like);
         let pacman_available = which("pacman").is_ok();
-        let is_arch_compatible = is_arch || pacman_available;
+        let dnf_available = which("dnf").is_ok() || which("rpm").is_ok();
+        let nix_available = which("nix").is_ok();
+        let nixos_rebuild_available = which("nixos-rebuild").is_ok();
+        let flatpak_available = which("flatpak").is_ok();
 
-        let family = if is_arch_compatible {
-            DistroFamily::Arch
-        } else if id == "fedora" || is_fedora_family(&id, &id_like) {
-            DistroFamily::Fedora
-        } else if id == "nixos" || Path::new("/etc/NIXOS").exists() {
+        let is_nix = is_nixos_family(&id, &id_like);
+        let is_fed = is_fedora_family(&id, &id_like) || Path::new("/etc/fedora-release").exists();
+        let is_arch = is_arch_family(&id, &id_like) || Path::new("/etc/arch-release").exists();
+
+        let family = if is_nix {
             DistroFamily::NixOS
+        } else if is_fed || (dnf_available && !pacman_available) {
+            DistroFamily::Fedora
+        } else if is_arch || pacman_available {
+            DistroFamily::Arch
+        } else if nix_available || nixos_rebuild_available {
+            DistroFamily::NixOS
+        } else if dnf_available {
+            DistroFamily::Fedora
         } else {
             DistroFamily::Unknown
         };
 
-        let arch_flavor = detect_arch_flavor(&id, &pretty_name, is_arch_compatible);
+        let is_compatible = family != DistroFamily::Unknown;
+        let is_arch_compatible = family == DistroFamily::Arch;
+        let is_fedora_compatible = family == DistroFamily::Fedora;
+        let is_nixos_compatible = family == DistroFamily::NixOS;
+
+        let distro_flavor = match family {
+            DistroFamily::Arch => detect_arch_flavor(&id, &pretty_name, true),
+            DistroFamily::Fedora => detect_fedora_flavor(&id, &pretty_name, &version_id),
+            DistroFamily::NixOS => detect_nixos_flavor(&pretty_name, &version_id),
+            DistroFamily::Unknown => pretty_name.clone(),
+        };
+        let arch_flavor = distro_flavor.clone();
 
         let aur_helper = if which("paru").is_ok() {
             Some("paru".to_string())
@@ -298,10 +375,18 @@ impl DistroInfo {
             id,
             pretty_name,
             id_like,
+            is_compatible,
             is_arch_compatible,
+            is_fedora_compatible,
+            is_nixos_compatible,
+            distro_flavor,
             arch_flavor,
             aur_helper,
             pacman_available,
+            dnf_available,
+            nix_available,
+            nixos_rebuild_available,
+            flatpak_available,
             kernel,
             arch,
             current_user,
@@ -339,6 +424,9 @@ pub fn detect_arch_flavor(id: &str, pretty_name: &str, is_arch_compat: bool) -> 
         "parabola" => "Parabola GNU/Linux-libre".to_string(),
         "hyperbola" => "Hyperbola GNU/Linux-libre".to_string(),
         "steamos" => "SteamOS (Arch derivative)".to_string(),
+        "chimeraos" => "ChimeraOS (Arch derivative)".to_string(),
+        "blendos" => "BlendOS".to_string(),
+        "rebornos" => "RebornOS".to_string(),
         _ => {
             if pretty_name.to_lowercase().contains("arch") {
                 pretty_name.to_string()
@@ -346,6 +434,46 @@ pub fn detect_arch_flavor(id: &str, pretty_name: &str, is_arch_compat: bool) -> 
                 format!("{pretty_name} (Arch-compatible)")
             }
         }
+    }
+}
+
+pub fn detect_fedora_flavor(id: &str, pretty_name: &str, version_id: &str) -> String {
+    let ver_suffix = if !version_id.is_empty() {
+        format!(" {version_id}")
+    } else {
+        String::new()
+    };
+
+    match id {
+        "fedora" => format!("Fedora Linux{ver_suffix}"),
+        "nobara" => format!("Nobara Linux{ver_suffix}"),
+        "bazzite" => format!("Bazzite{ver_suffix}"),
+        "ultramarine" => format!("Ultramarine Linux{ver_suffix}"),
+        "rhel" => format!("Red Hat Enterprise Linux{ver_suffix}"),
+        "centos" => format!("CentOS Stream{ver_suffix}"),
+        "rocky" => format!("Rocky Linux{ver_suffix}"),
+        "almalinux" => format!("AlmaLinux{ver_suffix}"),
+        "silverblue" => format!("Fedora Silverblue{ver_suffix}"),
+        "kinoite" => format!("Fedora Kinoite{ver_suffix}"),
+        "sericea" => format!("Fedora Sericea{ver_suffix}"),
+        "onyx" => format!("Fedora Onyx{ver_suffix}"),
+        _ => {
+            if pretty_name.to_lowercase().contains("fedora") {
+                pretty_name.to_string()
+            } else {
+                format!("{pretty_name} (Fedora-compatible)")
+            }
+        }
+    }
+}
+
+pub fn detect_nixos_flavor(pretty_name: &str, version_id: &str) -> String {
+    if !version_id.is_empty() {
+        format!("NixOS {version_id}")
+    } else if !pretty_name.is_empty() && pretty_name.to_lowercase().contains("nixos") {
+        pretty_name.to_string()
+    } else {
+        "NixOS (Flakes)".to_string()
     }
 }
 
@@ -367,6 +495,10 @@ pub fn is_arch_id(id: &str, id_like: &[String]) -> bool {
         "hyperbola",
         "salient",
         "steamos",
+        "blendos",
+        "chimeraos",
+        "rebornos",
+        "anarchy",
     ];
 
     if arch_ids.iter().any(|&candidate| candidate == id) {
@@ -377,11 +509,27 @@ pub fn is_arch_id(id: &str, id_like: &[String]) -> bool {
 }
 
 pub fn is_arch_family(id: &str, id_like: &[String]) -> bool {
-    is_arch_id(id, id_like) || Path::new("/etc/arch-release").exists() || which("pacman").is_ok()
+    is_arch_id(id, id_like) || Path::new("/etc/arch-release").exists()
 }
 
-fn is_fedora_family(id: &str, id_like: &[String]) -> bool {
-    let fedora_ids = ["fedora", "nobara", "bazzite", "ultramarine", "rhel", "centos"];
+pub fn is_fedora_family(id: &str, id_like: &[String]) -> bool {
+    let fedora_ids = [
+        "fedora",
+        "nobara",
+        "bazzite",
+        "ultramarine",
+        "rhel",
+        "centos",
+        "rocky",
+        "almalinux",
+        "korora",
+        "chapeau",
+        "qubes",
+        "silverblue",
+        "kinoite",
+        "sericea",
+        "onyx",
+    ];
 
     if fedora_ids.iter().any(|&candidate| candidate == id) {
         return true;
@@ -392,10 +540,18 @@ fn is_fedora_family(id: &str, id_like: &[String]) -> bool {
         .any(|like| like == "fedora" || like == "rhel" || like == "centos")
 }
 
-fn read_os_release() -> (String, String, Vec<String>) {
+pub fn is_nixos_family(id: &str, id_like: &[String]) -> bool {
+    id == "nixos"
+        || id_like.iter().any(|like| like == "nixos")
+        || Path::new("/etc/NIXOS").exists()
+        || which("nixos-rebuild").is_ok()
+}
+
+fn read_os_release() -> (String, String, Vec<String>, String) {
     let mut id = "unknown".to_string();
     let mut pretty_name = "Linux".to_string();
     let mut id_like = Vec::new();
+    let mut version_id = String::new();
 
     let paths = ["/etc/os-release", "/usr/lib/os-release"];
     for p in paths {
@@ -417,6 +573,7 @@ fn read_os_release() -> (String, String, Vec<String>) {
                                 .map(|s| s.to_lowercase())
                                 .collect();
                         }
+                        "VERSION_ID" => version_id = v,
                         _ => {}
                     }
                 }
@@ -425,7 +582,7 @@ fn read_os_release() -> (String, String, Vec<String>) {
         }
     }
 
-    (id, pretty_name, id_like)
+    (id, pretty_name, id_like, version_id)
 }
 
 fn is_current_user_root() -> bool {
@@ -459,6 +616,9 @@ mod tests {
         assert!(is_arch_id("arcolinux", &[]));
         assert!(is_arch_id("archcraft", &[]));
         assert!(is_arch_id("steamos", &[]));
+        assert!(is_arch_id("chimeraos", &[]));
+        assert!(is_arch_id("blendos", &[]));
+        assert!(is_arch_id("rebornos", &[]));
 
         let ubuntu_like = vec!["debian".to_string()];
         assert!(!is_arch_id("ubuntu", &ubuntu_like));
@@ -466,11 +626,60 @@ mod tests {
     }
 
     #[test]
-    fn test_arch_flavor_names() {
+    fn test_fedora_family_detection() {
+        assert!(is_fedora_family("fedora", &[]));
+        assert!(is_fedora_family("nobara", &["fedora".to_string()]));
+        assert!(is_fedora_family("bazzite", &["fedora".to_string()]));
+        assert!(is_fedora_family("ultramarine", &[]));
+        assert!(is_fedora_family("rhel", &[]));
+        assert!(is_fedora_family("centos", &[]));
+        assert!(is_fedora_family("rocky", &[]));
+        assert!(is_fedora_family("almalinux", &[]));
+        assert!(is_fedora_family("silverblue", &[]));
+        assert!(is_fedora_family("kinoite", &[]));
+        assert!(is_fedora_family("sericea", &[]));
+        assert!(is_fedora_family("onyx", &[]));
+        assert!(!is_fedora_family("arch", &[]));
+        assert!(!is_fedora_family("nixos", &[]));
+    }
+
+    #[test]
+    fn test_nixos_family_detection() {
+        assert!(is_nixos_family("nixos", &[]));
+        assert!(is_nixos_family("custom", &["nixos".to_string()]));
+        assert!(!is_nixos_family("fedora", &[]));
+        assert!(!is_nixos_family("arch", &[]));
+    }
+
+    #[test]
+    fn test_flavor_names() {
         assert_eq!(detect_arch_flavor("cachyos", "CachyOS Linux", true), "CachyOS Linux");
         assert_eq!(detect_arch_flavor("arch", "Arch Linux", true), "Arch Linux (Pure)");
         assert_eq!(detect_arch_flavor("endeavouros", "EndeavourOS", true), "EndeavourOS");
         assert_eq!(detect_arch_flavor("garuda", "Garuda Linux", true), "Garuda Linux");
+        assert_eq!(detect_arch_flavor("steamos", "SteamOS", true), "SteamOS (Arch derivative)");
+        assert_eq!(detect_arch_flavor("chimeraos", "ChimeraOS", true), "ChimeraOS (Arch derivative)");
+        assert_eq!(detect_fedora_flavor("fedora", "Fedora Linux", "41"), "Fedora Linux 41");
+        assert_eq!(detect_fedora_flavor("nobara", "Nobara Linux", "40"), "Nobara Linux 40");
+        assert_eq!(detect_fedora_flavor("bazzite", "Bazzite", "41"), "Bazzite 41");
+        assert_eq!(detect_fedora_flavor("silverblue", "Fedora Silverblue", "41"), "Fedora Silverblue 41");
+        assert_eq!(detect_nixos_flavor("NixOS", "24.11"), "NixOS 24.11");
+    }
+
+    #[test]
+    fn test_distro_family_build_steps() {
+        let config = crate::model::config::InstallConfig::default();
+        let arch_steps = DistroFamily::Arch.build_steps(&config);
+        let fedora_steps = DistroFamily::Fedora.build_steps(&config);
+        let nixos_steps = DistroFamily::NixOS.build_steps(&config);
+
+        assert!(!arch_steps.is_empty(), "Arch steps should not be empty");
+        assert!(!fedora_steps.is_empty(), "Fedora steps should not be empty");
+        assert!(!nixos_steps.is_empty(), "NixOS steps should not be empty");
+
+        assert!(arch_steps.iter().any(|s| s.id == "arch_packages"));
+        assert!(fedora_steps.iter().any(|s| s.id == "fedora_packages"));
+        assert!(nixos_steps.iter().any(|s| s.id == "nixos_rebuild_switch"));
     }
 
     #[test]

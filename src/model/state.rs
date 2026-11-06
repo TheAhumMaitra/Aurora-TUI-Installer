@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::distro::{arch, fedora, nixos, DistroFamily, DistroInfo};
+use crate::distro::{DistroFamily, DistroInfo};
 use crate::engine::runner::{EngineEvent, LogLevel};
 use crate::engine::step::InstallStep;
 use crate::model::config::InstallConfig;
@@ -122,20 +122,11 @@ impl AppState {
     }
 
     pub fn refresh_steps(&mut self) {
-        self.steps = if self.distro_info.is_arch_compatible || self.selected_distro == DistroFamily::Arch {
-            arch::build_steps(&self.config)
-        } else {
-            match self.selected_distro {
-                DistroFamily::Arch => arch::build_steps(&self.config),
-                DistroFamily::Fedora => fedora::build_steps(&self.config),
-                DistroFamily::NixOS => nixos::build_steps(&self.config),
-                DistroFamily::Unknown => Vec::new(),
-            }
-        };
+        self.steps = self.selected_distro.build_steps(&self.config);
     }
 
     pub fn current_filtered_packages(&self) -> Vec<&'static str> {
-        let groups = crate::distro::arch::ARCH_PACKAGE_GROUPS;
+        let groups = self.selected_distro.package_groups();
         if let Some(group) = groups.get(self.package_category_cursor) {
             let q = self.package_search_query.trim().to_lowercase();
             if q.is_empty() {
@@ -153,9 +144,17 @@ impl AppState {
         }
     }
 
-    #[allow(dead_code)]
+    pub fn cycle_distro(&mut self) {
+        self.selected_distro = self.selected_distro.cycle();
+        self.package_category_cursor = 0;
+        self.package_item_cursor = 0;
+        self.refresh_steps();
+    }
+
     pub fn set_distro(&mut self, distro: DistroFamily) {
         self.selected_distro = distro;
+        self.package_category_cursor = 0;
+        self.package_item_cursor = 0;
         self.refresh_steps();
     }
 

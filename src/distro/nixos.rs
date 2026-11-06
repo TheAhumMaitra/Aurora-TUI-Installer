@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#![allow(dead_code)]
-
 use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
-use crate::model::config::{Component, InstallConfig, NeovimPreset};
+use crate::model::config::{
+    BackupStrategy, Component, DisplayManagerChoice, InstallConfig, NeovimPreset,
+};
 
 pub const NIXOS_CONFIG_FILES: &[&str] = &[
     "configuration.nix",
@@ -30,31 +30,92 @@ pub const NIXOS_UI_PKGS: &[&str] = &[
     "swaynotificationcenter",
     "hyprlock",
     "hypridle",
+    "quickshell",
 ];
 
 pub const NIXOS_UTILS_PKGS: &[&str] = &[
     "kitty",
     "ghostty",
+    "alacritty",
+    "foot",
     "starship",
     "neovim",
     "cliphist",
     "wl-clipboard",
     "mise",
+    "btop",
+    "fish",
+    "eog",
+    "evince",
 ];
 
 pub const NIXOS_EXTRAS_PKGS: &[&str] = &[
     "app.zen_browser.zen",
+    "bluetui",
+    "jolt-tui",
+    "leenfetch",
+    "nmrs-tui",
     "nordzy-cursors",
     "sddm-astronaut-theme",
+    "termflix",
+    "waytrogen-aurora",
+    "weathr",
 ];
 
 pub const NIXOS_GAMING_PKGS: &[&str] = &[
     "steam",
     "gamemode",
     "mangohud",
+    "gamescope",
+];
+
+pub const ALL_NIXOS_PACKAGES: &[&str] = &[
+    "alacritty",
+    "app.zen_browser.zen",
+    "bluetui",
+    "btop",
+    "cliphist",
+    "eog",
+    "evince",
+    "fish",
+    "foot",
+    "gamemode",
+    "gamescope",
+    "ghostty",
+    "hypridle",
+    "hyprland",
+    "hyprlock",
+    "jolt-tui",
+    "kitty",
+    "leenfetch",
+    "mangohud",
+    "mise",
+    "neovim",
+    "networkmanager",
+    "nmrs-tui",
+    "nordzy-cursors",
+    "pipewire",
+    "quickshell",
+    "rofi",
+    "sddm-astronaut-theme",
+    "starship",
+    "steam",
+    "swaynotificationcenter",
+    "termflix",
+    "waybar",
+    "waytrogen-aurora",
+    "weathr",
+    "wireplumber",
+    "wl-clipboard",
+    "xdg-desktop-portal-hyprland",
 ];
 
 pub const NIXOS_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
+    DistroPackageGroup {
+        category: "★ All Packages (Unified)",
+        description: "Browse, search & select any specific packages across all categories in one view",
+        packages: ALL_NIXOS_PACKAGES,
+    },
     DistroPackageGroup {
         category: "Core Compositor (Flake)",
         description: "Hyprland compositor, XDG portal, audio services",
@@ -62,17 +123,17 @@ pub const NIXOS_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
     },
     DistroPackageGroup {
         category: "UI & Notification Daemons",
-        description: "Waybar status bar, Rofi, SwayNC, Hyprlock",
+        description: "Waybar status bar, Rofi, SwayNC, Hyprlock, Quickshell",
         packages: NIXOS_UI_PKGS,
     },
     DistroPackageGroup {
         category: "Utilities & Terminal Suite",
-        description: "Kitty, Ghostty, Starship, Neovim, Mise, Cliphist",
+        description: "Kitty, Ghostty, Starship, Neovim, Mise, Cliphist, Fish",
         packages: NIXOS_UTILS_PKGS,
     },
     DistroPackageGroup {
         category: "Rice Extras & Theme Assets",
-        description: "Zen Browser Flatpak, Nordzy cursors, SDDM astronaut theme",
+        description: "Zen Browser Flatpak, Nordzy cursors, SDDM astronaut theme, CLI tools",
         packages: NIXOS_EXTRAS_PKGS,
     },
     DistroPackageGroup {
@@ -82,8 +143,37 @@ pub const NIXOS_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
     },
 ];
 
+pub fn package_category_badge(pkg: &str) -> &'static str {
+    if NIXOS_CORE_PKGS.contains(&pkg) {
+        "Core"
+    } else if NIXOS_UI_PKGS.contains(&pkg) {
+        "UI"
+    } else if NIXOS_UTILS_PKGS.contains(&pkg) {
+        "Utils"
+    } else if NIXOS_EXTRAS_PKGS.contains(&pkg) {
+        "Extras"
+    } else if NIXOS_GAMING_PKGS.contains(&pkg) {
+        "Gaming"
+    } else {
+        "Nix"
+    }
+}
+
+pub fn all_nixos_packages() -> Vec<&'static str> {
+    ALL_NIXOS_PACKAGES.to_vec()
+}
+
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
+
+    // 0. Backup existing configs if requested
+    if config.backup_strategy == BackupStrategy::Timestamped {
+        steps.push(InstallStep::new(
+            "nixos_backup",
+            "Archive Existing Dotfiles (Timestamped Backup)",
+            "Safely backup existing ~/.config configurations before deploying Aurora",
+        ));
+    }
 
     // 1. Preflight
     steps.push(InstallStep::new(
@@ -112,7 +202,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         steps.push(InstallStep::new(
             "nixos_dotfiles",
             "Deploy Aurora Hyprland Dotfiles",
-            format!("Deploy Hyprland (Animation: {}), Waybar, SwayNC, Kitty configs", config.animation_profile.label()),
+            format!("Deploy Hyprland (Animation: {}), Waybar ({}), SwayNC, Kitty configs", config.animation_profile.label(), config.bar_layout.label()),
         ));
     }
 
@@ -126,10 +216,10 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     }
 
     // 5. SDDM Astronaut Theme
-    if config.is_component_selected(Component::SddmTheme) {
+    if config.display_manager != DisplayManagerChoice::NoneTty {
         steps.push(InstallStep::new(
             "nixos_sddm",
-            "Configure SDDM Astronaut Theme",
+            "Configure SDDM Astronaut Theme Assets",
             "Clone and configure astronaut theme assets and fonts for SDDM greeter",
         ));
     }
@@ -156,7 +246,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     if config.is_component_selected(Component::GamingSuite) {
         steps.push(InstallStep::new(
             "nixos_gaming",
-            "Install Gaming & Performance Suite",
+            "Configure Gaming Suite on NixOS",
             "Configure Steam client and GameMode optimization daemon on NixOS",
         ));
     }
@@ -187,4 +277,31 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     ));
 
     steps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_nixos_packages_sorted_and_unique() {
+        let pkgs = ALL_NIXOS_PACKAGES;
+        for i in 1..pkgs.len() {
+            assert!(
+                pkgs[i - 1] < pkgs[i],
+                "ALL_NIXOS_PACKAGES is not sorted or has duplicates: {} >= {}",
+                pkgs[i - 1],
+                pkgs[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_category_badge() {
+        assert_eq!(package_category_badge("hyprland"), "Core");
+        assert_eq!(package_category_badge("waybar"), "UI");
+        assert_eq!(package_category_badge("kitty"), "Utils");
+        assert_eq!(package_category_badge("app.zen_browser.zen"), "Extras");
+        assert_eq!(package_category_badge("steam"), "Gaming");
+    }
 }
