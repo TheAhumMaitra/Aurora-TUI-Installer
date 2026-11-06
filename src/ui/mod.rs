@@ -20,7 +20,7 @@ pub fn render_app(f: &mut Frame, state: &AppState) {
         .constraints([
             Constraint::Length(3), // Header & Breadcrumbs
             Constraint::Min(10),   // Active Screen Body
-            Constraint::Length(4), // Footer & Keybinds (multi-line wrapped, zero overlap)
+            Constraint::Length(5), // Footer & Keybinds (wrapped once more, 3 clean rows + border)
         ])
         .split(size);
 
@@ -136,9 +136,10 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 ("Tab", "Switch Card"),
                 ("Enter", "Review Plan"),
                 ("I", "Hardware Audit"),
-                ("K", "Package Customizer"),
-                ("A", "Select All Pkgs"),
-                ("X", "Deselect All Pkgs"),
+                ("K", "Packages"),
+                ("A", "Select All"),
+                ("X", "Deselect All"),
+                ("Q", "Quit"),
                 ("Esc", "Back"),
             ] {
                 row1.extend(tag(k, d));
@@ -157,28 +158,40 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 ("C", "Lockscreen"),
                 ("F", "Font"),
                 ("J", "Wallpaper"),
-                ("Y", "GPU"),
-                ("U", "Backup"),
-                ("E", "Audio DSP"),
-                ("Z", "Kernel"),
-                ("H", "Shell"),
-                ("G", "Gaming"),
                 ("O", "Motion"),
-                ("D", "Dry-Run"),
-                ("S", "Sudo-rs"),
             ] {
                 row2.extend(tag(k, d));
                 row2.push(sep());
             }
             row2.pop();
 
-            vec![Line::from(row1), Line::from(row2)]
+            let mut row3 = Vec::new();
+            for (k, d) in [
+                ("Y", "GPU Driver"),
+                ("U", "Backup"),
+                ("E", "Audio DSP"),
+                ("Z", "Kernel"),
+                ("H", "Shell"),
+                ("M", "Channel"),
+                ("G", "Gaming"),
+                ("D", "Dry-Run"),
+                ("S", "Sudo-rs"),
+            ] {
+                row3.extend(tag(k, d));
+                row3.push(sep());
+            }
+            row3.pop();
+
+            vec![Line::from(row1), Line::from(row2), Line::from(row3)]
         }
 
         AppScreen::Diagnostics => vec![
             Line::from(vec![
                 tag("Esc / Enter / I", "Return to Installer Configuration")[0].clone(),
                 tag("Esc / Enter / I", "Return to Installer Configuration")[1].clone(),
+                sep(),
+                tag("Q", "Quit Installer")[0].clone(),
+                tag("Q", "Quit Installer")[1].clone(),
             ]),
         ],
 
@@ -202,6 +215,7 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 ("U / Shift+A", "SELECT ALL PACKAGES GLOBALLY"),
                 ("X / Shift+N", "DESELECT ALL PACKAGES (PICK CERTAIN)"),
                 ("Enter / Esc", "Save Selection & Return"),
+                ("Q", "Quit Installer"),
             ] {
                 row2.extend(tag(k, d));
                 row2.push(sep());
@@ -231,6 +245,9 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 sep(),
                 tag("↑/↓ / PgUp/PgDn", "Scroll Log History")[0].clone(),
                 tag("↑/↓ / PgUp/PgDn", "Scroll Log History")[1].clone(),
+                sep(),
+                tag("Q", "Quit Installer")[0].clone(),
+                tag("Q", "Quit Installer")[1].clone(),
             ]),
         ],
 

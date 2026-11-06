@@ -359,9 +359,17 @@ fn run_tui_loop(
 }
 
 fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers) {
-    // Global exit shortcut
+    // Global exit shortcut: Ctrl+C
     if modifiers.contains(KeyModifiers::CONTROL)
         && (code == KeyCode::Char('c') || code == KeyCode::Char('C'))
+    {
+        state.should_exit = true;
+        return;
+    }
+
+    // Global 'q' / 'Q' exit shortcut at any time (except when actively typing in package search)
+    if (code == KeyCode::Char('q') || code == KeyCode::Char('Q'))
+        && !(state.current_screen == AppScreen::PackageSelection && state.package_search_active)
     {
         state.should_exit = true;
         return;
