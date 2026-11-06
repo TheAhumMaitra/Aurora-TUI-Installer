@@ -18,6 +18,10 @@ pub enum PresetArg {
     Full,
     #[value(name = "minimal")]
     Minimal,
+    #[value(name = "gaming")]
+    Gaming,
+    #[value(name = "oled")]
+    Oled,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -179,6 +183,86 @@ pub enum BackupArg {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum WindowEffectsArg {
+    #[value(name = "frosted")]
+    Frosted,
+    #[value(name = "neon")]
+    Neon,
+    #[value(name = "oled")]
+    Oled,
+    #[value(name = "flat")]
+    Flat,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum PowerArg {
+    #[value(name = "balanced")]
+    Balanced,
+    #[value(name = "performance")]
+    Performance,
+    #[value(name = "battery")]
+    Battery,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FirewallArg {
+    #[value(name = "ufw")]
+    Ufw,
+    #[value(name = "firewalld")]
+    Firewalld,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum DnsArg {
+    #[value(name = "quad9")]
+    Quad9,
+    #[value(name = "cloudflare")]
+    Cloudflare,
+    #[value(name = "adguard")]
+    AdGuard,
+    #[value(name = "system")]
+    System,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum CursorArg {
+    #[value(name = "nordzy")]
+    Nordzy,
+    #[value(name = "bibata")]
+    Bibata,
+    #[value(name = "catppuccin")]
+    Catppuccin,
+    #[value(name = "breeze")]
+    Breeze,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum IconArg {
+    #[value(name = "papirus")]
+    Papirus,
+    #[value(name = "tela")]
+    Tela,
+    #[value(name = "whitesur")]
+    WhiteSur,
+    #[value(name = "fluent")]
+    Fluent,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum VirtArg {
+    #[value(name = "qemu")]
+    Qemu,
+    #[value(name = "docker")]
+    Docker,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum DistroArg {
     #[value(name = "arch")]
     Arch,
@@ -302,6 +386,54 @@ pub struct CliArgs {
     /// Enable gaming and performance suite (Steam, GameMode, MangoHud)
     #[arg(long, default_value_t = false)]
     pub gaming: bool,
+
+    /// Choose Hyprland window blur and decoration effects (frosted, neon, oled, flat)
+    #[arg(long, value_enum)]
+    pub effects: Option<WindowEffectsArg>,
+
+    /// Choose laptop power & battery longevity profile (balanced, performance, battery, none)
+    #[arg(long, value_enum)]
+    pub power: Option<PowerArg>,
+
+    /// Choose desktop security firewall configuration (ufw, firewalld, none)
+    #[arg(long, value_enum)]
+    pub firewall: Option<FirewallArg>,
+
+    /// Choose privacy-respecting DNS profile (quad9, cloudflare, adguard, system)
+    #[arg(long, value_enum)]
+    pub dns: Option<DnsArg>,
+
+    /// Enable WiFi & Ethernet MAC address randomization for network privacy
+    #[arg(long, default_value_t = false)]
+    pub mac_randomize: bool,
+
+    /// Choose cursor theme (nordzy, bibata, catppuccin, breeze)
+    #[arg(long, value_enum)]
+    pub cursor: Option<CursorArg>,
+
+    /// Choose desktop icon theme (papirus, tela, whitesur, fluent)
+    #[arg(long, value_enum)]
+    pub icons: Option<IconArg>,
+
+    /// Choose virtualization and containerization suite (qemu, docker, none)
+    #[arg(long, value_enum)]
+    pub virt: Option<VirtArg>,
+
+    /// Skip creating pre-installation Btrfs snapshot
+    #[arg(long, default_value_t = false)]
+    pub no_snapshot: bool,
+
+    /// Skip configuring automated maintenance and cache cleanup timers
+    #[arg(long, default_value_t = false)]
+    pub no_maintenance: bool,
+
+    /// Automatically configure Proton-GE & Steam gaming optimizations
+    #[arg(long, default_value_t = false)]
+    pub proton_ge: bool,
+
+    /// Run post-installation system doctor verification audit and exit
+    #[arg(long, alias = "verify", default_value_t = false)]
+    pub doctor: bool,
 
     /// Choose the default Aurora theme to apply
     #[arg(short, long)]

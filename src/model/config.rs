@@ -32,14 +32,27 @@ impl InstallMode {
 pub enum InstallPreset {
     FullRice,
     MinimalRice,
+    GamingRice,
+    OledLaptopRice,
     Custom,
 }
 
+#[allow(dead_code)]
 impl InstallPreset {
+    pub const ALL: &[InstallPreset] = &[
+        InstallPreset::FullRice,
+        InstallPreset::MinimalRice,
+        InstallPreset::GamingRice,
+        InstallPreset::OledLaptopRice,
+        InstallPreset::Custom,
+    ];
+
     pub fn label(&self) -> &'static str {
         match self {
             InstallPreset::FullRice => "Full Rice (Recommended)",
             InstallPreset::MinimalRice => "Minimal Core",
+            InstallPreset::GamingRice => "Gaming & Steam Rice",
+            InstallPreset::OledLaptopRice => "OLED & Battery Laptop Rice",
             InstallPreset::Custom => "Custom Selection",
         }
     }
@@ -48,7 +61,19 @@ impl InstallPreset {
         match self {
             InstallPreset::FullRice => "Installs everything: desktop, SDDM astronaut theme, Waytrogen, Neovim, tools & fonts",
             InstallPreset::MinimalRice => "Installs only core Hyprland, Waybar, basic dotfiles and essential utils",
+            InstallPreset::GamingRice => "Optimized for gaming: Steam, GameMode, Proton-GE, MangoHud, Performance governor & Snappy curves",
+            InstallPreset::OledLaptopRice => "Optimized for OLED laptops: Pitch black theme, BatteryCare profile, TLP, 80% charge threshold",
             InstallPreset::Custom => "Fine-tune individual components, package lists, and development presets",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            InstallPreset::FullRice => InstallPreset::MinimalRice,
+            InstallPreset::MinimalRice => InstallPreset::GamingRice,
+            InstallPreset::GamingRice => InstallPreset::OledLaptopRice,
+            InstallPreset::OledLaptopRice => InstallPreset::Custom,
+            InstallPreset::Custom => InstallPreset::FullRice,
         }
     }
 }
@@ -713,6 +738,329 @@ impl BackupStrategy {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WindowEffectsChoice {
+    FrostedGlass,
+    CyberpunkNeon,
+    OledPureBlack,
+    MinimalFlat,
+}
+
+#[allow(dead_code)]
+impl WindowEffectsChoice {
+    pub const ALL: &[WindowEffectsChoice] = &[
+        WindowEffectsChoice::FrostedGlass,
+        WindowEffectsChoice::CyberpunkNeon,
+        WindowEffectsChoice::OledPureBlack,
+        WindowEffectsChoice::MinimalFlat,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            WindowEffectsChoice::FrostedGlass => "Frosted Glass (Heavy Blur, 12px Radius - Signature)",
+            WindowEffectsChoice::CyberpunkNeon => "Cyberpunk Neon (Glowing Dual Gradient Borders)",
+            WindowEffectsChoice::OledPureBlack => "OLED Pure Black (#000000 Pitch Black, 0% Blur)",
+            WindowEffectsChoice::MinimalFlat => "Minimal Flat (Sharp 0px, Zero Blur, 1px Border)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            WindowEffectsChoice::FrostedGlass => "Frosted Glass",
+            WindowEffectsChoice::CyberpunkNeon => "Cyberpunk Neon",
+            WindowEffectsChoice::OledPureBlack => "OLED Pure Black",
+            WindowEffectsChoice::MinimalFlat => "Minimal Flat",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            WindowEffectsChoice::FrostedGlass => WindowEffectsChoice::CyberpunkNeon,
+            WindowEffectsChoice::CyberpunkNeon => WindowEffectsChoice::OledPureBlack,
+            WindowEffectsChoice::OledPureBlack => WindowEffectsChoice::MinimalFlat,
+            WindowEffectsChoice::MinimalFlat => WindowEffectsChoice::FrostedGlass,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PowerProfileChoice {
+    Balanced,
+    Performance,
+    BatteryCare,
+    None,
+}
+
+#[allow(dead_code)]
+impl PowerProfileChoice {
+    pub const ALL: &[PowerProfileChoice] = &[
+        PowerProfileChoice::Balanced,
+        PowerProfileChoice::Performance,
+        PowerProfileChoice::BatteryCare,
+        PowerProfileChoice::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            PowerProfileChoice::Balanced => "Balanced (Standard Scheduler & Power Gov)",
+            PowerProfileChoice::Performance => "Performance Boost (AC Desktop / Max Boost)",
+            PowerProfileChoice::BatteryCare => "Battery Care (TLP/PPD + 80% Threshold + Lid Sleep)",
+            PowerProfileChoice::None => "None / Keep Existing Power Settings",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            PowerProfileChoice::Balanced => "Balanced",
+            PowerProfileChoice::Performance => "Performance",
+            PowerProfileChoice::BatteryCare => "Battery Care",
+            PowerProfileChoice::None => "Default",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            PowerProfileChoice::Balanced => PowerProfileChoice::Performance,
+            PowerProfileChoice::Performance => PowerProfileChoice::BatteryCare,
+            PowerProfileChoice::BatteryCare => PowerProfileChoice::None,
+            PowerProfileChoice::None => PowerProfileChoice::Balanced,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FirewallChoice {
+    UfwHardened,
+    Firewalld,
+    None,
+}
+
+#[allow(dead_code)]
+impl FirewallChoice {
+    pub const ALL: &[FirewallChoice] = &[
+        FirewallChoice::UfwHardened,
+        FirewallChoice::Firewalld,
+        FirewallChoice::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            FirewallChoice::UfwHardened => "UFW Desktop Hardened (Block Inbound, Allow KDE Connect)",
+            FirewallChoice::Firewalld => "Firewalld (Fedora Standard Desktop Zone)",
+            FirewallChoice::None => "None / Keep Existing Firewall",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            FirewallChoice::UfwHardened => "UFW Hardened",
+            FirewallChoice::Firewalld => "Firewalld",
+            FirewallChoice::None => "No Firewall",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            FirewallChoice::UfwHardened => FirewallChoice::Firewalld,
+            FirewallChoice::Firewalld => FirewallChoice::None,
+            FirewallChoice::None => FirewallChoice::UfwHardened,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DnsPrivacyChoice {
+    SystemDefault,
+    Quad9,
+    Cloudflare,
+    AdGuard,
+}
+
+#[allow(dead_code)]
+impl DnsPrivacyChoice {
+    pub const ALL: &[DnsPrivacyChoice] = &[
+        DnsPrivacyChoice::SystemDefault,
+        DnsPrivacyChoice::Quad9,
+        DnsPrivacyChoice::Cloudflare,
+        DnsPrivacyChoice::AdGuard,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            DnsPrivacyChoice::SystemDefault => "System Default (ISP / Router DNS)",
+            DnsPrivacyChoice::Quad9 => "Quad9 (9.9.9.9 - Threat Blocking & Zero Logging)",
+            DnsPrivacyChoice::Cloudflare => "Cloudflare (1.1.1.1 - Fast DoH Privacy DNS)",
+            DnsPrivacyChoice::AdGuard => "AdGuard DNS (Network-Level Ad & Tracker Blocking)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            DnsPrivacyChoice::SystemDefault => "System Default",
+            DnsPrivacyChoice::Quad9 => "Quad9 (9.9.9.9)",
+            DnsPrivacyChoice::Cloudflare => "Cloudflare (1.1.1.1)",
+            DnsPrivacyChoice::AdGuard => "AdGuard Ad-Block",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            DnsPrivacyChoice::SystemDefault => DnsPrivacyChoice::Quad9,
+            DnsPrivacyChoice::Quad9 => DnsPrivacyChoice::Cloudflare,
+            DnsPrivacyChoice::Cloudflare => DnsPrivacyChoice::AdGuard,
+            DnsPrivacyChoice::AdGuard => DnsPrivacyChoice::SystemDefault,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CursorThemeChoice {
+    Nordzy,
+    BibataModern,
+    CatppuccinMocha,
+    Breeze,
+}
+
+#[allow(dead_code)]
+impl CursorThemeChoice {
+    pub const ALL: &[CursorThemeChoice] = &[
+        CursorThemeChoice::Nordzy,
+        CursorThemeChoice::BibataModern,
+        CursorThemeChoice::CatppuccinMocha,
+        CursorThemeChoice::Breeze,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            CursorThemeChoice::Nordzy => "Nordzy Cursors (Aurora Signature Nordic)",
+            CursorThemeChoice::BibataModern => "Bibata Modern Classic (Minimalist Rounded)",
+            CursorThemeChoice::CatppuccinMocha => "Catppuccin Mocha Cursors (Pastel Aesthetic)",
+            CursorThemeChoice::Breeze => "Breeze (Clean Desktop Standard)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            CursorThemeChoice::Nordzy => "Nordzy Nordic",
+            CursorThemeChoice::BibataModern => "Bibata Modern",
+            CursorThemeChoice::CatppuccinMocha => "Catppuccin Mocha",
+            CursorThemeChoice::Breeze => "Breeze Standard",
+        }
+    }
+
+    pub fn theme_name(&self) -> &'static str {
+        match self {
+            CursorThemeChoice::Nordzy => "Nordzy-cursors",
+            CursorThemeChoice::BibataModern => "Bibata-Modern-Classic",
+            CursorThemeChoice::CatppuccinMocha => "Catppuccin-Mocha-Dark-Cursors",
+            CursorThemeChoice::Breeze => "breeze_cursors",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            CursorThemeChoice::Nordzy => CursorThemeChoice::BibataModern,
+            CursorThemeChoice::BibataModern => CursorThemeChoice::CatppuccinMocha,
+            CursorThemeChoice::CatppuccinMocha => CursorThemeChoice::Breeze,
+            CursorThemeChoice::Breeze => CursorThemeChoice::Nordzy,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum IconThemeChoice {
+    PapirusDark,
+    TelaCircle,
+    WhiteSur,
+    FluentDark,
+}
+
+#[allow(dead_code)]
+impl IconThemeChoice {
+    pub const ALL: &[IconThemeChoice] = &[
+        IconThemeChoice::PapirusDark,
+        IconThemeChoice::TelaCircle,
+        IconThemeChoice::WhiteSur,
+        IconThemeChoice::FluentDark,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            IconThemeChoice::PapirusDark => "Papirus Dark (Aurora Official Vector Icons)",
+            IconThemeChoice::TelaCircle => "Tela Circle (Modern Circular Colorful)",
+            IconThemeChoice::WhiteSur => "WhiteSur (macOS Clean Aesthetics)",
+            IconThemeChoice::FluentDark => "Fluent Dark (Modern Fluent Geometry)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            IconThemeChoice::PapirusDark => "Papirus Dark",
+            IconThemeChoice::TelaCircle => "Tela Circle",
+            IconThemeChoice::WhiteSur => "WhiteSur",
+            IconThemeChoice::FluentDark => "Fluent Dark",
+        }
+    }
+
+    pub fn theme_name(&self) -> &'static str {
+        match self {
+            IconThemeChoice::PapirusDark => "Papirus-Dark",
+            IconThemeChoice::TelaCircle => "Tela-circle-dark",
+            IconThemeChoice::WhiteSur => "WhiteSur-dark",
+            IconThemeChoice::FluentDark => "Fluent-dark",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            IconThemeChoice::PapirusDark => IconThemeChoice::TelaCircle,
+            IconThemeChoice::TelaCircle => IconThemeChoice::WhiteSur,
+            IconThemeChoice::WhiteSur => IconThemeChoice::FluentDark,
+            IconThemeChoice::FluentDark => IconThemeChoice::PapirusDark,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VirtualizationChoice {
+    None,
+    QemuKvm,
+    DockerPodman,
+}
+
+#[allow(dead_code)]
+impl VirtualizationChoice {
+    pub const ALL: &[VirtualizationChoice] = &[
+        VirtualizationChoice::None,
+        VirtualizationChoice::QemuKvm,
+        VirtualizationChoice::DockerPodman,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            VirtualizationChoice::None => "None / No VM or Container Daemons",
+            VirtualizationChoice::QemuKvm => "QEMU / KVM + Virt-Manager (Hardware Accelerated)",
+            VirtualizationChoice::DockerPodman => "Docker + Podman Rootless (Container Engines)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            VirtualizationChoice::None => "None",
+            VirtualizationChoice::QemuKvm => "QEMU/KVM + Virt-Manager",
+            VirtualizationChoice::DockerPodman => "Docker + Podman",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            VirtualizationChoice::None => VirtualizationChoice::QemuKvm,
+            VirtualizationChoice::QemuKvm => VirtualizationChoice::DockerPodman,
+            VirtualizationChoice::DockerPodman => VirtualizationChoice::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Component {
     SystemPackages,
@@ -725,6 +1073,10 @@ pub enum Component {
     ShellConfig,
     SudoRs,
     GamingSuite,
+    PowerOptimization,
+    SecurityHardening,
+    Virtualization,
+    MaintenanceTimer,
 }
 
 impl Component {
@@ -739,6 +1091,10 @@ impl Component {
         Component::ShellConfig,
         Component::SudoRs,
         Component::GamingSuite,
+        Component::PowerOptimization,
+        Component::SecurityHardening,
+        Component::Virtualization,
+        Component::MaintenanceTimer,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -753,6 +1109,10 @@ impl Component {
             Component::ShellConfig => "Shell PATH & Default Shell Configuration",
             Component::SudoRs => "Switch sudo to sudo-rs (Memory-safe Rust implementation)",
             Component::GamingSuite => "Gaming & Performance Suite (Steam, GameMode, MangoHud)",
+            Component::PowerOptimization => "Laptop Power & Battery Care Suite (TLP / PPD / 80% Limit)",
+            Component::SecurityHardening => "Desktop Security Hardening (Firewall, DNS & MAC Randomize)",
+            Component::Virtualization => "Virtualization & Containers (QEMU / KVM / Docker)",
+            Component::MaintenanceTimer => "Automated System Maintenance & Health Timers",
         }
     }
 
@@ -768,6 +1128,10 @@ impl Component {
             Component::ShellConfig => "Configures environment variables, default shell, and adds ~/.cargo/bin and ~/.local/bin to PATH",
             Component::SudoRs => "Optionally symlinks /usr/bin/sudo to /usr/bin/sudo-rs for modern Rust memory safety",
             Component::GamingSuite => "Installs Steam, GameMode optimizer daemon, MangoHud FPS overlay, and gaming tweaks",
+            Component::PowerOptimization => "Configures CPU governors, TLP / power-profiles-daemon, 80% charge threshold, and lid sleep",
+            Component::SecurityHardening => "Configures UFW desktop rules, Quad9/Cloudflare DNS, and WiFi/Ethernet MAC randomization",
+            Component::Virtualization => "Configures QEMU/KVM, libvirtd, Virt-Manager or Docker/Podman with user permissions",
+            Component::MaintenanceTimer => "Installs user systemd timers for weekly package cache cleanup, SSD trim, and dotfile backups",
         }
     }
 }
@@ -798,6 +1162,17 @@ pub struct InstallConfig {
     pub source_dir: PathBuf,
     pub allow_sudo_rs: bool,
     pub disabled_packages: HashSet<String>,
+    pub window_effects: WindowEffectsChoice,
+    pub power_profile: PowerProfileChoice,
+    pub security_firewall: FirewallChoice,
+    pub dns_privacy: DnsPrivacyChoice,
+    pub mac_randomization: bool,
+    pub cursor_theme: CursorThemeChoice,
+    pub icon_theme: IconThemeChoice,
+    pub virtualization: VirtualizationChoice,
+    pub btrfs_snapshot: bool,
+    pub auto_maintenance: bool,
+    pub proton_ge: bool,
 }
 
 impl Default for InstallConfig {
@@ -817,6 +1192,8 @@ impl Default for InstallConfig {
             Component::Dotfiles,
             Component::ShellConfig,
             Component::SudoRs,
+            Component::SecurityHardening,
+            Component::MaintenanceTimer,
         ];
 
         Self {
@@ -844,6 +1221,17 @@ impl Default for InstallConfig {
             source_dir: PathBuf::new(),
             allow_sudo_rs: true,
             disabled_packages: HashSet::new(),
+            window_effects: WindowEffectsChoice::FrostedGlass,
+            power_profile: PowerProfileChoice::Balanced,
+            security_firewall: FirewallChoice::UfwHardened,
+            dns_privacy: DnsPrivacyChoice::Quad9,
+            mac_randomization: true,
+            cursor_theme: CursorThemeChoice::Nordzy,
+            icon_theme: IconThemeChoice::PapirusDark,
+            virtualization: VirtualizationChoice::None,
+            btrfs_snapshot: true,
+            auto_maintenance: true,
+            proton_ge: false,
         }
     }
 }
@@ -876,6 +1264,8 @@ impl InstallConfig {
                     Component::Dotfiles,
                     Component::ShellConfig,
                     Component::SudoRs,
+                    Component::SecurityHardening,
+                    Component::MaintenanceTimer,
                 ];
                 self.disabled_packages.clear();
             }
@@ -889,6 +1279,45 @@ impl InstallConfig {
                 self.neovim_preset = NeovimPreset::None;
                 self.browser_choice = BrowserChoice::None;
                 self.display_manager = DisplayManagerChoice::NoneTty;
+                self.disabled_packages.clear();
+            }
+            InstallPreset::GamingRice => {
+                self.selected_components = vec![
+                    Component::SystemPackages,
+                    Component::ExtraRepositories,
+                    Component::SddmTheme,
+                    Component::RustScripts,
+                    Component::Waytrogen,
+                    Component::LazyVim,
+                    Component::Dotfiles,
+                    Component::ShellConfig,
+                    Component::SudoRs,
+                    Component::GamingSuite,
+                    Component::PowerOptimization,
+                ];
+                self.power_profile = PowerProfileChoice::Performance;
+                self.kernel_tweaks = KernelTweakProfile::Performance;
+                self.animation_profile = AnimationProfile::Snappy;
+                self.proton_ge = true;
+                self.disabled_packages.clear();
+            }
+            InstallPreset::OledLaptopRice => {
+                self.selected_components = vec![
+                    Component::SystemPackages,
+                    Component::ExtraRepositories,
+                    Component::SddmTheme,
+                    Component::RustScripts,
+                    Component::Waytrogen,
+                    Component::LazyVim,
+                    Component::Dotfiles,
+                    Component::ShellConfig,
+                    Component::SudoRs,
+                    Component::PowerOptimization,
+                    Component::MaintenanceTimer,
+                ];
+                self.window_effects = WindowEffectsChoice::OledPureBlack;
+                self.power_profile = PowerProfileChoice::BatteryCare;
+                self.animation_profile = AnimationProfile::Minimal;
                 self.disabled_packages.clear();
             }
             InstallPreset::Custom => {}
@@ -1054,5 +1483,76 @@ mod tests {
         // Toggle
         cfg.toggle_package("waybar");
         assert!(cfg.is_package_enabled("waybar"));
+    }
+
+    #[test]
+    fn test_window_effects_cycling() {
+        let e = WindowEffectsChoice::FrostedGlass;
+        assert_eq!(e.cycle(), WindowEffectsChoice::CyberpunkNeon);
+        assert_eq!(e.cycle().cycle(), WindowEffectsChoice::OledPureBlack);
+        assert_eq!(e.cycle().cycle().cycle(), WindowEffectsChoice::MinimalFlat);
+        assert_eq!(e.cycle().cycle().cycle().cycle(), WindowEffectsChoice::FrostedGlass);
+    }
+
+    #[test]
+    fn test_power_profile_cycling() {
+        let p = PowerProfileChoice::Balanced;
+        assert_eq!(p.cycle(), PowerProfileChoice::Performance);
+        assert_eq!(p.cycle().cycle(), PowerProfileChoice::BatteryCare);
+        assert_eq!(p.cycle().cycle().cycle(), PowerProfileChoice::None);
+        assert_eq!(p.cycle().cycle().cycle().cycle(), PowerProfileChoice::Balanced);
+    }
+
+    #[test]
+    fn test_firewall_choice_cycling() {
+        let f = FirewallChoice::UfwHardened;
+        assert_eq!(f.cycle(), FirewallChoice::Firewalld);
+        assert_eq!(f.cycle().cycle(), FirewallChoice::None);
+        assert_eq!(f.cycle().cycle().cycle(), FirewallChoice::UfwHardened);
+    }
+
+    #[test]
+    fn test_dns_privacy_cycling() {
+        let d = DnsPrivacyChoice::SystemDefault;
+        assert_eq!(d.cycle(), DnsPrivacyChoice::Quad9);
+        assert_eq!(d.cycle().cycle(), DnsPrivacyChoice::Cloudflare);
+        assert_eq!(d.cycle().cycle().cycle(), DnsPrivacyChoice::AdGuard);
+        assert_eq!(d.cycle().cycle().cycle().cycle(), DnsPrivacyChoice::SystemDefault);
+    }
+
+    #[test]
+    fn test_cursor_theme_cycling() {
+        let c = CursorThemeChoice::Nordzy;
+        assert_eq!(c.cycle(), CursorThemeChoice::BibataModern);
+        assert_eq!(c.cycle().cycle(), CursorThemeChoice::CatppuccinMocha);
+        assert_eq!(c.cycle().cycle().cycle(), CursorThemeChoice::Breeze);
+        assert_eq!(c.cycle().cycle().cycle().cycle(), CursorThemeChoice::Nordzy);
+    }
+
+    #[test]
+    fn test_icon_theme_cycling() {
+        let i = IconThemeChoice::PapirusDark;
+        assert_eq!(i.cycle(), IconThemeChoice::TelaCircle);
+        assert_eq!(i.cycle().cycle(), IconThemeChoice::WhiteSur);
+        assert_eq!(i.cycle().cycle().cycle(), IconThemeChoice::FluentDark);
+        assert_eq!(i.cycle().cycle().cycle().cycle(), IconThemeChoice::PapirusDark);
+    }
+
+    #[test]
+    fn test_virtualization_choice_cycling() {
+        let v = VirtualizationChoice::None;
+        assert_eq!(v.cycle(), VirtualizationChoice::QemuKvm);
+        assert_eq!(v.cycle().cycle(), VirtualizationChoice::DockerPodman);
+        assert_eq!(v.cycle().cycle().cycle(), VirtualizationChoice::None);
+    }
+
+    #[test]
+    fn test_preset_cycling() {
+        let p = InstallPreset::FullRice;
+        assert_eq!(p.cycle(), InstallPreset::MinimalRice);
+        assert_eq!(p.cycle().cycle(), InstallPreset::GamingRice);
+        assert_eq!(p.cycle().cycle().cycle(), InstallPreset::OledLaptopRice);
+        assert_eq!(p.cycle().cycle().cycle().cycle(), InstallPreset::Custom);
+        assert_eq!(p.cycle().cycle().cycle().cycle().cycle(), InstallPreset::FullRice);
     }
 }

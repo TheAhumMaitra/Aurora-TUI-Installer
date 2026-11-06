@@ -65,6 +65,22 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         Span::styled(info.gpu.label(), Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD))
     };
 
+    let chassis_badge = if info.is_laptop {
+        let batt_txt = match info.battery_percent {
+            Some(pct) => format!("Laptop ({}% Battery)", pct),
+            None => "Laptop Chassis".to_string(),
+        };
+        Span::styled(batt_txt, Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled("Desktop Workstation", Style::default().fg(COLOR_CYAN))
+    };
+
+    let fs_badge = if info.is_btrfs {
+        Span::styled("Btrfs (Rollback Snapshots Supported)", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled("Standard Linux FS (ext4/xfs)", Style::default().fg(COLOR_TEXT))
+    };
+
     let specs_lines = vec![
         Line::from(vec![
             Span::styled("OS Distribution:   ", Style::default().fg(COLOR_CYAN)),
@@ -73,6 +89,14 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         Line::from(vec![
             Span::styled("Target Family:     ", Style::default().fg(COLOR_CYAN)),
             Span::styled(format!("{} (Package Mgr: {})", state.selected_distro.label(), state.selected_distro.package_manager()), Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("Hardware Chassis:  ", Style::default().fg(COLOR_CYAN)),
+            chassis_badge,
+        ]),
+        Line::from(vec![
+            Span::styled("Root Filesystem:   ", Style::default().fg(COLOR_CYAN)),
+            fs_badge,
         ]),
         Line::from(vec![
             Span::styled("Linux Kernel:      ", Style::default().fg(COLOR_CYAN)),

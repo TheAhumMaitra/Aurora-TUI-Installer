@@ -30,16 +30,16 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([
             Constraint::Length(5), // 1. Preset & Package Shortcuts
             Constraint::Length(5), // 2. Developer Suite & Web Core
-            Constraint::Length(7), // 3. Rice Aesthetics (Bar, Launcher, Lock, Font, Wallpaper, DM, Motion)
-            Constraint::Min(6),    // 4. Theme picker with live palette swatches
-            Constraint::Length(6), // 5. Hardware, GPU, Backup, Kernel & Flags
+            Constraint::Length(7), // 3. Rice Aesthetics (Bar, Rofi, Effects, Cursor, Icons, Lock, Font, Motion)
+            Constraint::Min(5),    // 4. Theme picker with live palette swatches
+            Constraint::Length(7), // 5. Hardware, Power, Security, GPU, Virt & Flags
         ])
         .split(area);
 
     // 1. Preset Box & Package Shortcuts
     let preset_active = state.active_config_section == ConfigSection::Preset;
     let preset_block = if preset_active {
-        active_block(" 1. Preset Profile [P to cycle, K for Packages, A for All, X for None] ")
+        active_block(" 1. Preset Profile [P: Cycle (Full/Min/Game/Oled), K: Packages, A: All, X: None] ")
     } else {
         default_block(" 1. Preset Profile ")
     };
@@ -122,10 +122,10 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     .block(dev_block.padding(Padding::horizontal(1)));
     f.render_widget(dev_p, chunks[1]);
 
-    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Lockscreen, Font, Wallpaper, Motion)
+    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Effects, Cursor, Icons, Lock, Font, Motion)
     let aes_active = state.active_config_section == ConfigSection::Aesthetics;
     let aes_block = if aes_active {
-        active_block(" 3. Desktop Rice Aesthetics [B: Bar, R: Rofi, C: Lock, F: Font, J: Wall, L: DM, O: Anim] ")
+        active_block(" 3. Desktop Rice Aesthetics [B: Bar, R: Rofi, 2: Effects, 3: Cursor, 4: Icons, C, F, J, L, O] ")
     } else {
         default_block(" 3. Desktop Rice Aesthetics ")
     };
@@ -147,39 +147,58 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled(" [R]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
+            Span::styled("Effects:     ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.window_effects.short_name(),
+                Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [2]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Motion:   ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.animation_profile.label(), Style::default().fg(COLOR_YELLOW)),
+            Span::styled(" [O]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Cursor:      ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.cursor_theme.short_name(),
+                Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [3]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Icons:    ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.icon_theme.short_name(),
+                Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [4]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
             Span::styled("Lockscreen:  ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
                 state.config.lockscreen.short_name(),
-                Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
+                Style::default().fg(COLOR_WHITE),
             ),
             Span::styled(" [C]", Style::default().fg(COLOR_DARK)),
             Span::raw("   "),
             Span::styled("Wallpaper: ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
                 state.config.wallpaper_engine.short_name(),
-                Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+                Style::default().fg(COLOR_YELLOW),
             ),
             Span::styled(" [J]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
-            Span::styled("Mono Font:   ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(
-                state.config.font_choice.label(),
-                Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" [F]", Style::default().fg(COLOR_DARK)),
-        ]),
-        Line::from(vec![
             Span::styled("Display Mgr: ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
-                state.config.display_manager.label(),
-                Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+                state.config.display_manager.short_name(),
+                Style::default().fg(COLOR_YELLOW),
             ),
             Span::styled(" [L]", Style::default().fg(COLOR_DARK)),
             Span::raw("   "),
-            Span::styled("Motion: ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(state.config.animation_profile.label(), Style::default().fg(COLOR_GREEN)),
-            Span::styled(" [O]", Style::default().fg(COLOR_DARK)),
+            Span::styled("Font:     ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.font_choice.short_name(), Style::default().fg(COLOR_CYAN)),
+            Span::styled(" [F]", Style::default().fg(COLOR_DARK)),
         ]),
     ])
     .block(aes_block.padding(Padding::horizontal(1)));
@@ -231,24 +250,24 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         .block(theme_block.padding(Padding::horizontal(1)));
     f.render_widget(theme_p, chunks[3]);
 
-    // 5. Hardware, GPU, Backup, Audio & Flags
+    // 5. Hardware, Power, Security, GPU, Virt & Flags
     let flags_active = state.active_config_section == ConfigSection::SystemFlags;
     let flags_block = if flags_active {
-        active_block(" 5. Hardware, GPU & Performance [Y: GPU, U: Backup, I: Audit, E, Z, H, G, D, S] ")
+        active_block(" 5. Hardware, Power & Security [1: Power, 5: UFW, 6: DNS, 7: Virt, 8: Snap, 9: Maint, 0: MAC] ")
     } else {
-        default_block(" 5. Hardware, GPU & Performance ")
+        default_block(" 5. Hardware, Power & Security ")
     };
 
     let dry_box = if state.config.dry_run {
-        Span::styled("[X] Dry-Run Mode [D]  ", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD))
+        Span::styled("[X] Dry-Run [D]  ", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD))
     } else {
-        Span::styled("[ ] Dry-Run Mode [D]  ", Style::default().fg(COLOR_TEXT))
+        Span::styled("[ ] Dry-Run [D]  ", Style::default().fg(COLOR_TEXT))
     };
 
     let sudo_box = if state.config.allow_sudo_rs {
-        Span::styled("[X] Sudo-rs Memory Safe [S]  ", Style::default().fg(COLOR_GREEN))
+        Span::styled("[X] Sudo-rs [S]  ", Style::default().fg(COLOR_GREEN))
     } else {
-        Span::styled("[ ] Sudo-rs Memory Safe [S]  ", Style::default().fg(COLOR_DARK))
+        Span::styled("[ ] Sudo-rs [S]  ", Style::default().fg(COLOR_DARK))
     };
 
     let gaming_box = if state.config.is_component_selected(Component::GamingSuite) {
@@ -257,34 +276,53 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         Span::styled("[ ] Gaming Suite [G]", Style::default().fg(COLOR_DARK))
     };
 
+    let snap_box = if state.config.btrfs_snapshot {
+        Span::styled("[X] Btrfs Snap [8]  ", Style::default().fg(COLOR_CYAN))
+    } else {
+        Span::styled("[ ] Btrfs Snap [8]  ", Style::default().fg(COLOR_DARK))
+    };
+
+    let maint_box = if state.config.auto_maintenance {
+        Span::styled("[X] Auto Maint [9]  ", Style::default().fg(COLOR_GREEN))
+    } else {
+        Span::styled("[ ] Auto Maint [9]  ", Style::default().fg(COLOR_DARK))
+    };
+
+    let mac_box = if state.config.mac_randomization {
+        Span::styled("[X] MAC Rand [0]", Style::default().fg(COLOR_CYAN))
+    } else {
+        Span::styled("[ ] MAC Rand [0]", Style::default().fg(COLOR_DARK))
+    };
+
     let flags_p = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("GPU Driver:    ", Style::default().fg(COLOR_CYAN)),
+            Span::styled("Power Profile: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.power_profile.short_name(), Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(" [1]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("GPU: ", Style::default().fg(COLOR_CYAN)),
             Span::styled(state.config.gpu_profile.short_name(), Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
             Span::styled(" [Y]", Style::default().fg(COLOR_DARK)),
-            Span::raw("   "),
-            Span::styled("Backup: ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(state.config.backup_strategy.short_name(), Style::default().fg(COLOR_WHITE)),
-            Span::styled(" [U]", Style::default().fg(COLOR_DARK)),
             Span::raw("   "),
             Span::styled("[I: Sys Audit]", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
         ]),
         Line::from(vec![
-            Span::styled("Sound Suite:   ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(state.config.audio_suite.label(), Style::default().fg(COLOR_WHITE)),
-            Span::styled(" [E]", Style::default().fg(COLOR_DARK)),
+            Span::styled("Firewall:      ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.security_firewall.short_name(), Style::default().fg(COLOR_WHITE)),
+            Span::styled(" [5]", Style::default().fg(COLOR_DARK)),
             Span::raw("   "),
-            Span::styled("Kernel: ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(state.config.kernel_tweaks.short_name(), Style::default().fg(COLOR_GREEN)),
-            Span::styled(" [Z]", Style::default().fg(COLOR_DARK)),
+            Span::styled("DNS: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.dns_privacy.short_name(), Style::default().fg(COLOR_CYAN)),
+            Span::styled(" [6]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
-            Span::styled("Default Shell: ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(state.config.shell_choice.label(), Style::default().fg(COLOR_WHITE)),
-            Span::styled(" [H]", Style::default().fg(COLOR_DARK)),
+            Span::styled("Virt / VM:     ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.virtualization.short_name(), Style::default().fg(COLOR_WHITE)),
+            Span::styled(" [7]", Style::default().fg(COLOR_DARK)),
             Span::raw("   "),
             gaming_box,
         ]),
+        Line::from(vec![snap_box, maint_box, mac_box]),
         Line::from(vec![dry_box, sudo_box]),
     ])
     .block(flags_block.padding(Padding::horizontal(1)));
@@ -341,7 +379,6 @@ fn render_right_pane(f: &mut Frame, state: &AppState, area: Rect) {
             check,
             Span::styled(comp.label(), label_style),
         ]));
-        comp_lines.push(Line::from(""));
     }
 
     let comp_p = Paragraph::new(comp_lines);

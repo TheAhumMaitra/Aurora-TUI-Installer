@@ -46,7 +46,7 @@ Aurora delivers a unified, first-class installation pipeline across three major 
 | **NixOS** | `nix` (Flakes), `nixos-rebuild`, Flatpak | NixOS 24.05+, NixOS Unstable with declarative Nix flakes and Home Manager configurations. |
 
 ### Automatic Detection & Manual Override
-- **Automatic Detection**: On startup, the installer inspects `/etc/os-release`, checks available package management binaries (`pacman`, `dnf`, `nix`), and verifies system architecture and GPU drivers.
+- **Automatic Detection**: On startup, the installer inspects `/etc/os-release`, checks available package management binaries (`pacman`, `dnf`, `nix`), checks laptop chassis vs desktop hardware, detects Btrfs filesystem support, and verifies GPU drivers.
 - **Interactive Switching**: Press `[D]` on the **Welcome screen** to cycle target distributions between **Arch Linux**, **Fedora**, and **NixOS**.
 - **CLI Flag Override**: Pass `--distro arch`, `--distro fedora`, or `--distro nixos` to explicitly target a specific distribution family.
 
@@ -96,113 +96,91 @@ Aurora delivers a unified, first-class installation pipeline across three major 
 
 ---
 
-## ✦ Extraordinary Customization Options
+## ✦ Extraordinary Features Suite
 
-### 1. Granular Package Selector & Bulk Controls
-Fine-tune and customize the exact packages installed, with instant bulk controls:
-- **Global Bulk Controls**:
-  - `[U]` or `[Shift+A]`: **SELECT ALL PACKAGES GLOBALLY** (across all categories)
-  - `[X]` or `[Shift+N]`: **DESELECT ALL PACKAGES GLOBALLY** (start from a blank slate to pick only what you need)
-  - `[Shift+I]`: **INVERT SELECTION GLOBALLY**
-  - In Configuration Preset card: Press `[A]` to Enable All, `[X]` to Disable All.
-- **Category-Level Shortcuts (`[K]` Package Customizer)**:
-  - `[/]`: Live search filter across package names
-  - `[Space]`: Toggle individual package checkbox
-  - `[A]`: Select All packages in active category or filtered search
-  - `[N]`: Deselect All packages in active category or filtered search
-  - `[I]`: Invert selection in active category or filtered search
-  - `[Tab] / [←/→]`: Switch between Categories and Packages column
-  - `[Enter] / [Esc] / [B]`: Save selection and return to Configuration
+### 1. Aurora System Doctor & Health Verifier (`--doctor` / `[V]`)
+Run an instant 8-subsystem diagnostic audit verifying:
+- Hyprland binary and syntax integrity.
+- Waybar configuration and CSS stylesheet validity.
+- PipeWire, WirePlumber, and physical ALSA audio cards.
+- Display manager, SDDM greeter, and theme availability.
+- Dotfiles preservation check (guarantees `~/.config/hypr/User` integrity).
+- Direct rendering DRM/KMS graphics acceleration nodes.
+- High-resolution monospace Nerd Font cache status.
+- Wayland wallpaper engine daemon responsiveness.
 
-### 2. Distribution Selection (`[D]` on Welcome Screen / `--distro`)
-- Cycle between **Arch Linux**, **Fedora**, and **NixOS** directly from the Welcome screen.
+```bash
+# Run standalone health verification anytime
+./target/release/aurora-installer --doctor
+```
 
-### 3. Neovim IDE Distribution Selection (`[V]` / `--neovim`)
-- **LazyVim Starter** (Aurora official default): Complete preconfigured Neovim environment with Lazy.nvim, LSP, Treesitter, and Which-Key.
-- **NvChad**: Blazing fast startup time (<20ms) with rich UI popups, statusline themes, and cheatsheet.
-- **AstroNvim**: Feature-rich extensible configuration tailored for modern full-stack development.
-- **Kickstart.nvim**: Single-file modular template documented for clean personal customization.
-- **None / Keep Existing**: Preserves your existing `~/.config/nvim` untouched.
+### 2. Specialized Installation Presets (`[P]` / `--preset`)
+Cycle between 5 tailored presets designed for specific workflows:
+- **Full Rice**: Complete desktop suite with SDDM Astronaut theme, Neovim IDE, tools, fonts, and dotfiles.
+- **Minimal Core**: Lightweight foundation containing only Hyprland, Waybar, core dotfiles, and essential utils.
+- **Gaming & Steam Rice**: Optimized for low latency with Steam, GameMode, Proton-GE, MangoHud, Performance governor, and Snappy animation curves.
+- **OLED & Battery Laptop Rice**: Battery longevity profile with true pitch-black `#000000` backgrounds, 0% blur, TLP power-saving, and 80% charge threshold.
+- **Custom Selection**: Fine-grained component selection from scratch.
 
-### 4. Default Web Browser Selection (`[W]` / `--browser`)
-- **Zen Browser** (Aurora Signature - vertical split tabs, Arc-like workflow, privacy-first)
-- **Brave** (Native adblocking & privacy shield)
-- **Firefox** (Official Wayland open-source standard)
-- **Chromium** (Pure engine & high compatibility)
-- **None** (Preserve current browser untouched)
+### 3. Hyprland Window Effects & Blur Presets (`[2]` / `--effects`)
+Choose from 4 preconfigured Hyprland window decoration and blur shader profiles:
+- **Frosted Glass**: Heavy Gaussian blur (size 8, passes 3), subtle drop shadow, 12px rounded borders, 0.90 opacity — *Aurora signature look*.
+- **Cyberpunk Neon**: Glowing dual gradient active borders (`#ff007f` to `#00f0ff`), vivid drop shadow, 0.95 opacity, snappy motion.
+- **OLED Pure Black**: #000000 true pitch-black backgrounds, 100% opacity, zero blur, max power savings on OLED displays.
+- **Minimal Flat**: Sharp 0px corners, zero blur, 1px subtle borders, ultra-low GPU overhead.
 
-### 5. Display Manager / Login Screen Selection (`[L]` / `--dm`)
-- **SDDM Astronaut Theme** (Animated astronaut theme with elegant QML Wayland animations)
-- **Ly** (Ultra-minimalist console TUI matrix login)
-- **Greetd (Tuigreet)** (Fast Wayland-native greeter)
-- **Manual / TTY** (Direct login from TTY, starts Hyprland on login)
+### 4. Laptop Power & Battery Care Suite (`[1]` / `--power`)
+Intelligently detects battery presence and provides 4 power profiles:
+- **Balanced**: Standard Linux CPU governor (ondemand/schedutil) with balanced display timeouts.
+- **Performance Boost**: AC desktop & gaming mode: maximum CPU boost, performance governor, PCIe ASPM disabled, no display sleep.
+- **Battery Care**: Laptop longevity: auto-cpufreq / power-profiles-daemon power-saving, 80% charge limit on ASUS/ThinkPad/Lenovo hardware, 3m screen dimming, and suspend on lid close.
+- **None**: Keeps existing system power configurations untouched.
 
-### 6. Waybar Status Bar Layout Variants (`[B]` / `--bar`)
-- **Floating Island** (Rounded pill islands with window gaps - Aurora signature)
-- **Full Width Edge** (Solid edge-to-edge top bar with powerline glyphs)
-- **Dual Waybar** (Top status bar + bottom taskbar & workspace dock)
-- **Minimal Clean** (Uncluttered time, battery, and workspaces)
+### 5. Desktop Security & Privacy Hardening Suite (`[5]`, `[6]`, `[0]`)
+- **Desktop Firewall (`[5]` / `--firewall`)**:
+  - `UFW Desktop Hardened`: Default deny incoming, allow outgoing, with preconfigured LAN pinholes for LocalSend (port 53317), KDE Connect (ports 1714–1764), and mDNS (port 5353).
+  - `Firewalld`: Configures Fedora standard desktop zone.
+  - `None`: Leaves existing firewall untouched.
+- **Privacy DNS Profile (`[6]` / `--dns`)**:
+  - `Quad9`: 9.9.9.9 / 149.112.112.112 with DNS-over-TLS (threat blocking & zero logging).
+  - `Cloudflare`: 1.1.1.1 / 1.0.0.1 (low latency DoH).
+  - `AdGuard`: 94.140.14.14 (network-wide ad & tracker blocking).
+  - `SystemDefault`: System default ISP/router DNS.
+- **MAC Address Randomization (`[0]` / `--mac-randomize`)**:
+  - Automatically randomizes WiFi and Ethernet MAC addresses on connection for public network anonymity.
 
-### 7. Rofi Application Launcher Styles (`[R]` / `--launcher`)
-- **Spotlight** (Center floating search palette - macOS Spotlight / Raycast feel)
-- **Fullscreen Drawer** (Full screen icon grid - GNOME / macOS Launchpad feel)
-- **Corner Popup** (Left-aligned discreet desktop launcher)
+### 6. Cursor & Icon Themes Customizer (`[3]`, `[4]`)
+- **Cursor Themes (`[3]` / `--cursor`)**:
+  - **Nordzy Cursors** (Aurora Signature Nordic design)
+  - **Bibata Modern Classic** (Minimalist smooth rounded cursors)
+  - **Catppuccin Mocha Cursors** (Pastel aesthetic)
+  - **Breeze** (Clean desktop standard)
+- **Icon Themes (`[4]` / `--icons`)**:
+  - **Papirus Dark** (Aurora official vector icon set)
+  - **Tela Circle** (Modern circular colorful icons)
+  - **WhiteSur** (macOS-inspired clean rounded icons)
+  - **Fluent Dark** (Microsoft Fluent design language)
 
-### 8. Audio & DSP Sound Processing Suite (`[E]` / `--audio`)
-- **EasyEffects Studio DSP** (PipeWire + EasyEffects with custom equalizer, bass boost, and voice isolation)
-- **Pure PipeWire** (Lightweight PipeWire + WirePlumber without DSP effects)
+### 7. Virtualization & Containerization Module (`[7]` / `--virt`)
+- **QEMU / KVM + Virt-Manager**: Enables `libvirtd.service`, autostarts default NAT network, and adds user to `libvirt` and `kvm` groups.
+- **Docker + Podman Rootless**: Enables container runtime services with rootless user group permissions.
+- **None**: No virtualization daemons.
 
-### 9. Kernel & Scheduler Performance Optimizations (`[Z]` / `--tweaks`)
-- **Ananicy-cpp + ZRAM** (Auto-nice process priority daemon for Hyprland/Games + compressed ZRAM swap)
-- **Standard Linux** (Default kernel process scheduling)
+### 8. Btrfs Pre-Install Instant Rollback Snapshot (`[8]` / `--no-snapshot`)
+- Automatically detects if `/` or `/home` is on a Btrfs filesystem.
+- Generates a read-only snapshot (`/.aurora_pre_install_snapshot_<timestamp>`) before any package is installed or dotfile is touched.
+- Enables instant 1-second system rollback if needed.
 
-### 10. Preferred Terminal Emulator Selection (`[T]` / `--terminal`)
-- **Kitty** (Aurora signature standard)
-- **Ghostty** (Ultra-fast modern GPU-accelerated terminal)
-- **Alacritty** (Minimalist high-performance OpenGL terminal)
-- **Foot** (Lightweight Wayland native terminal)
+### 9. Automated Weekly Maintenance Timers (`[9]` / `--no-maintenance`)
+- Installs `aurora-maintenance.timer` under systemd user services to run weekly:
+  - Cleans package caches (`paccache -rk2` on Arch, `dnf clean packages` on Fedora, `nix-collect-garbage -d` on NixOS).
+  - Performs SSD fstrim.
+  - Generates weekly timestamped dotfiles backups.
 
-### 11. Monospace Nerd Font Choice (`[F]` / `--font`)
-- **JetBrains Mono Nerd Font** (Aurora signature coding font)
-- **Fira Code Nerd Font** (Ligature-rich programming font)
-- **Cascadia Code Nerd Font** (Modern Microsoft typography)
-- **Hack Nerd Font** (Clean, legible monospace standard)
-
-### 12. Wayland Lockscreen Daemon (`[C]` / `--lockscreen`)
-- **Hyprlock** (Fast, elegant Wayland lockscreen for Hyprland)
-- **Swaylock-effects** (Swaylock fork with blur, fade, and indicator effects)
-- **None** (Do not install or configure a lockscreen)
-
-### 13. GPU Driver Profile (`[Y]` / `--gpu`)
-- **Auto-Detect** (Inspects hardware via `sysinfo` / `lspci` / `/sys/class/drm`)
-- **NVIDIA Proprietary** (Configures `nvidia_drm.modeset=1`, Wayland environment flags)
-- **AMD Mesa** (Configures Radv Vulkan driver and Mesa Wayland acceleration)
-- **Intel Mesa** (Configures Intel Iris / ANV Vulkan driver)
-- **Virtual Machine** (Disables hardware acceleration flags for VirtualBox / QEMU / VMware)
-
-### 14. Wallpaper Engine Daemon (`[J]` / `--wallpaper`)
-- **Swww** (Smooth animated wallpaper daemon)
-- **Hyprpaper** (Fast, native Hyprland wallpaper utility)
-- **Awww** (Lightweight wallpaper daemon)
-- **Mpvpaper** (Video wallpaper daemon backed by MPV)
-
-### 15. Default Login Shell Selection (`[H]` / `--shell`)
-- **Fish**: Modern shell with smart autosuggestions, completion, and syntax highlighting.
-- **Zsh**: Configured with Starship prompt and high-speed plugins.
-- **Bash**: Traditional shell enhanced with Starship prompt.
-
-### 16. Gaming & Performance Suite (`[G]` / `--gaming`)
-Toggle the dedicated gaming module with `[G]` or `--gaming`:
-- Installs **Steam**, **GameMode** (Feral Interactive daemon for CPU/GPU governor priority), **MangoHud** (Vulkan/OpenGL performance overlay), and **Gamescope**.
-
-### 17. Hyprland Animation Speed Profiles (`[O]`)
-Cycle animation curves with `[O]`:
-- **Snappy** (0.15s instant responsiveness)
-- **Smooth** (0.3s fluid cinematic curves)
-- **Minimal** (reduced motion for low-latency or battery conservation)
-
-### 18. Live Theme Palette Swatches
-The theme selector features live RGB color swatch blocks (`████`) displaying each theme's accent, primary, secondary, and background colors in real time.
+### 10. Steam & Proton-GE Gaming Enhancements (`--proton-ge`)
+- Auto-configures Proton-GE compatibility directories (`~/.steam/root/compatibilitytools.d/`).
+- Deploys custom MangoHud gaming overlay metrics (`~/.config/MangoHud/MangoHud.conf`).
+- Configures GameMode CPU governor priorities.
 
 ---
 
@@ -235,8 +213,14 @@ Launch the installer in your terminal:
 ./target/release/aurora-installer
 ```
 
+### System Health Doctor Verification
+Run instant preflight and post-install health verification:
+```bash
+./target/release/aurora-installer --doctor
+```
+
 ### Distro Override
-Override detection to preview or install for a specific target distribution:
+Preview or install for a specific target distribution:
 ```bash
 # Arch Linux and derivatives
 ./target/release/aurora-installer --distro arch
@@ -255,15 +239,19 @@ Preview all commands, configurations, and scripts safely without modifying your 
 ```
 
 ### Hardware & System Preflight Diagnostics
-Run hardware, kernel, memory, storage, and GPU audits:
+Run hardware, kernel, memory, storage, laptop battery, and GPU audits:
 ```bash
 ./target/release/aurora-installer --diagnostics
 ```
 
-### Non-Interactive / Headless Mode
+### Specialized Non-Interactive Presets
 Automate installation in scripts or CI:
 ```bash
-./target/release/aurora-installer --distro arch --non-interactive --preset full --neovim lazyvim --terminal kitty --gaming --theme "Aurora Default"
+# Gaming-optimized setup
+./target/release/aurora-installer --preset gaming --non-interactive
+
+# OLED Laptop battery-saving setup
+./target/release/aurora-installer --preset oled --non-interactive
 ```
 
 ### Export & Import Configuration Profiles
@@ -288,7 +276,19 @@ Options:
       --dry-run                  Preview actions without applying changes
   -y, --non-interactive          Run without interactive prompts (headless)
   -m, --mode <MODE>              Select release channel (stable vs git)
-  -p, --preset <PRESET>          Choose component preset (full, minimal)
+  -p, --preset <PRESET>          Choose preset (full, minimal, gaming, oled)
+      --effects <EFFECTS>        Choose window effects (frosted, neon, oled, flat)
+      --power <POWER>            Choose power profile (balanced, performance, battery, none)
+      --firewall <FIREWALL>      Choose firewall (ufw, firewalld, none)
+      --dns <DNS>                Choose privacy DNS (quad9, cloudflare, adguard, system)
+      --mac-randomize            Enable WiFi & Ethernet MAC randomization
+      --cursor <CURSOR>          Choose cursor theme (nordzy, bibata, catppuccin, breeze)
+      --icons <ICONS>            Choose icon theme (papirus, tela, whitesur, fluent)
+      --virt <VIRT>              Choose virtualization suite (qemu, docker, none)
+      --no-snapshot              Skip pre-installation Btrfs rollback snapshot
+      --no-maintenance           Skip automated weekly maintenance timers
+      --proton-ge                Configure Proton-GE & MangoHud gaming overlay
+      --doctor                   Run system doctor health verification and exit
       --neovim <NEOVIM>          Choose Neovim preset (lazyvim, nvchad, astronvim, kickstart, none)
       --terminal <TERMINAL>      Choose terminal emulator (kitty, ghostty, alacritty, foot)
       --shell <SHELL>            Choose default shell (fish, zsh, bash)
@@ -329,11 +329,22 @@ Options:
 | **Welcome** | `Enter` | Proceed to Configuration |
 | **Welcome** | `D` | **Cycle Target Distribution** (Arch ↔ Fedora ↔ NixOS) |
 | **Welcome** | `I` | Open Hardware & Diagnostics preflight report |
+| **Welcome** | `V` | **Run System Doctor** health verification check |
 | **Welcome** | `Q` / `Esc` | Quit installer |
+| **Configuration** | `P` | **Cycle Preset** (Full Rice ↔ Minimal ↔ Gaming ↔ OLED Laptop ↔ Custom) |
+| **Configuration** | `1` | **Cycle Power Profile** (Balanced ↔ Performance ↔ Battery Care ↔ None) |
+| **Configuration** | `2` | **Cycle Window Effects** (Frosted Glass ↔ Cyberpunk Neon ↔ OLED Pure Black ↔ Minimal Flat) |
+| **Configuration** | `3` | **Cycle Cursor Theme** (Nordzy ↔ Bibata Modern ↔ Catppuccin Mocha ↔ Breeze) |
+| **Configuration** | `4` | **Cycle Icon Theme** (Papirus Dark ↔ Tela Circle ↔ WhiteSur ↔ Fluent Dark) |
+| **Configuration** | `5` | **Cycle Firewall** (UFW Desktop Hardened ↔ Firewalld ↔ None) |
+| **Configuration** | `6` | **Cycle Privacy DNS** (Quad9 9.9.9.9 ↔ Cloudflare 1.1.1.1 ↔ AdGuard ↔ System) |
+| **Configuration** | `7` | **Cycle Virtualization** (None ↔ QEMU/KVM + Virt-Manager ↔ Docker + Podman) |
+| **Configuration** | `8` | **Toggle Btrfs Instant Rollback Snapshot** |
+| **Configuration** | `9` | **Toggle Automated Maintenance Timers** |
+| **Configuration** | `0` | **Toggle MAC Address Randomization** |
 | **Configuration** | `K` | **Open Granular Package Selector** |
 | **Configuration** | `A` | **SELECT ALL PACKAGES GLOBALLY** |
 | **Configuration** | `X` | **DESELECT ALL PACKAGES GLOBALLY** |
-| **Configuration** | `P` | Cycle Preset (Full Rice ↔ Minimal ↔ Custom) |
 | **Configuration** | `V` | **Cycle Neovim Preset** (LazyVim ↔ NvChad ↔ AstroNvim ↔ Kickstart ↔ None) |
 | **Configuration** | `T` | **Cycle Terminal Emulator** (Kitty ↔ Ghostty ↔ Alacritty ↔ Foot) |
 | **Configuration** | `W` | **Cycle Web Browser** (Zen Browser ↔ Brave ↔ Firefox ↔ Chromium ↔ None) |
@@ -375,6 +386,7 @@ Options:
 | **Summary** | `Q` | Cancel and quit |
 | **Installation** | `S` | Toggle live log auto-scroll |
 | **Installation** | `↑` / `↓` / `PgUp` / `PgDn` | Scroll terminal log history |
+| **Complete** | `V` | **Run System Doctor** health verification audit |
 | **Complete** | `Enter` / `Q` | Exit installer |
 | **Complete** | `R` | Reboot system |
 

@@ -113,6 +113,11 @@ fn render_results_card(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled("4. Change Themes Anytime: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
             Span::styled("aurora apply-theme <name>", Style::default().fg(COLOR_WHITE)),
         ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled("⚡ System Doctor: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled("Press [V] to run instant Health Verification Audit", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+        ]),
     ];
 
     let p = Paragraph::new(lines);

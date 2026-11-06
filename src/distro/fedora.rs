@@ -5,7 +5,7 @@ use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
 use crate::model::config::{
     BackupStrategy, BrowserChoice, Component, DisplayManagerChoice, InstallConfig, InstallMode,
-    NeovimPreset,
+    NeovimPreset, VirtualizationChoice,
 };
 
 pub const FEDORA_COPR_REPOS: &[&str] = &[
@@ -416,7 +416,16 @@ pub fn all_fedora_packages() -> Vec<&'static str> {
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
 
-    // 0. Backup existing configs if requested
+    // 0a. Btrfs Snapshot (Instant Rollback Hook)
+    if config.btrfs_snapshot {
+        steps.push(InstallStep::new(
+            "btrfs_snapshot",
+            "Create Pre-Installation Btrfs Snapshot",
+            "Create instant rollback snapshot before applying system changes",
+        ));
+    }
+
+    // 0b. Backup existing configs if requested
     if config.backup_strategy == BackupStrategy::Timestamped {
         steps.push(InstallStep::new(
             "fedora_backup",
@@ -551,7 +560,66 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 15. Final theme & polish
+    // 15. Power & Battery Longevity Suite
+    if config.is_component_selected(Component::PowerOptimization) {
+        steps.push(InstallStep::new(
+            "power_optimization",
+            format!("Configure Power Profile ({})", config.power_profile.short_name()),
+            format!("Apply {} power management and battery longevity settings", config.power_profile.label()),
+        ));
+    }
+
+    // 16. Security & Privacy Hardening
+    if config.is_component_selected(Component::SecurityHardening) {
+        steps.push(InstallStep::new(
+            "security_hardening",
+            "Apply Security & Privacy Hardening",
+            "Configure desktop firewall rules, privacy DNS, and MAC randomization",
+        ));
+    }
+
+    // 17. Window Effects & Blur Presets
+    steps.push(InstallStep::new(
+        "window_effects",
+        format!("Configure Window Effects ({})", config.window_effects.short_name()),
+        format!("Deploy {} decoration and blur shader parameters", config.window_effects.label()),
+    ));
+
+    // 18. Cursor & Icon Themes Customizer
+    steps.push(InstallStep::new(
+        "cursor_icon_themes",
+        format!("Deploy Cursor ({}) & Icon ({}) Themes", config.cursor_theme.short_name(), config.icon_theme.short_name()),
+        "Configure GTK, desktop icon cache, and Wayland cursor inheritance",
+    ));
+
+    // 19. Virtualization Suite
+    if config.is_component_selected(Component::Virtualization) && config.virtualization != VirtualizationChoice::None {
+        steps.push(InstallStep::new(
+            "virtualization_setup",
+            format!("Configure Virtualization ({})", config.virtualization.short_name()),
+            "Enable hypervisor / container services and grant user group permissions",
+        ));
+    }
+
+    // 20. Proton-GE & Gaming Enhancements
+    if config.proton_ge {
+        steps.push(InstallStep::new(
+            "proton_ge_setup",
+            "Configure Proton-GE & Steam Gaming Enhancements",
+            "Setup Steam compatibility tools directory, MangoHud metrics, and GameMode",
+        ));
+    }
+
+    // 21. Automated Maintenance Timers
+    if config.is_component_selected(Component::MaintenanceTimer) && config.auto_maintenance {
+        steps.push(InstallStep::new(
+            "system_maintenance",
+            "Install Automated Maintenance & Health Timers",
+            "Deploy systemd user timer for weekly cache cleaning, SSD trim, and dotfile backups",
+        ));
+    }
+
+    // 22. Final theme & polish
     steps.push(InstallStep::new(
         "fedora_theme",
         "Apply Default Aurora Theme",

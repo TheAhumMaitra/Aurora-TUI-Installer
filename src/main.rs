@@ -9,9 +9,10 @@ mod ui;
 
 use clap::Parser;
 use cli::{
-    AudioArg, BackupArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, DistroArg, FontArg,
-    GpuArg, LauncherArg, LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg,
-    TweaksArg, WallpaperArg,
+    AudioArg, BackupArg, BarLayoutArg, BrowserArg, CliArgs, CursorArg, DisplayManagerArg,
+    DistroArg, DnsArg, FirewallArg, FontArg, GpuArg, IconArg, LauncherArg, LockscreenArg, ModeArg,
+    NeovimArg, PowerArg, PresetArg, ShellArg, TerminalArg, TweaksArg, VirtArg, WallpaperArg,
+    WindowEffectsArg,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -21,9 +22,10 @@ use crossterm::{
 use distro::DistroInfo;
 use model::config::{
     AudioSuiteChoice, BackupStrategy, BarLayoutChoice, BrowserChoice, Component,
-    DisplayManagerChoice, FontChoice, GpuProfile, InstallConfig, InstallMode, InstallPreset,
-    KernelTweakProfile, LauncherStyle, LockscreenChoice, NeovimPreset, ShellChoice, TerminalChoice,
-    WallpaperEngine,
+    CursorThemeChoice, DisplayManagerChoice, DnsPrivacyChoice, FirewallChoice, FontChoice,
+    GpuProfile, IconThemeChoice, InstallConfig, InstallMode, InstallPreset, KernelTweakProfile,
+    LauncherStyle, LockscreenChoice, NeovimPreset, PowerProfileChoice, ShellChoice, TerminalChoice,
+    VirtualizationChoice, WallpaperEngine, WindowEffectsChoice,
 };
 use model::state::{AppScreen, AppState, ConfigSection};
 use model::theme::AVAILABLE_THEMES;
@@ -41,6 +43,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Fast-path hardware diagnostics report check
     if args.diagnostics {
         print_diagnostics_report(&distro_info);
+        return Ok(());
+    }
+
+    // Fast-path System Doctor verification check
+    if args.doctor {
+        let dummy_cfg = InstallConfig::default();
+        let report = engine::run_doctor(&distro_info, &dummy_cfg);
+        engine::print_doctor_report(&report);
         return Ok(());
     }
 
@@ -69,6 +79,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match preset {
             PresetArg::Full => config.apply_preset(InstallPreset::FullRice),
             PresetArg::Minimal => config.apply_preset(InstallPreset::MinimalRice),
+            PresetArg::Gaming => config.apply_preset(InstallPreset::GamingRice),
+            PresetArg::Oled => config.apply_preset(InstallPreset::OledLaptopRice),
         }
     }
     if let Some(neovim) = args.neovim {
@@ -191,6 +203,78 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if args.gaming && !config.selected_components.contains(&Component::GamingSuite) {
         config.selected_components.push(Component::GamingSuite);
     }
+    if let Some(eff) = args.effects {
+        config.window_effects = match eff {
+            WindowEffectsArg::Frosted => WindowEffectsChoice::FrostedGlass,
+            WindowEffectsArg::Neon => WindowEffectsChoice::CyberpunkNeon,
+            WindowEffectsArg::Oled => WindowEffectsChoice::OledPureBlack,
+            WindowEffectsArg::Flat => WindowEffectsChoice::MinimalFlat,
+        };
+    }
+    if let Some(p) = args.power {
+        config.power_profile = match p {
+            PowerArg::Balanced => PowerProfileChoice::Balanced,
+            PowerArg::Performance => PowerProfileChoice::Performance,
+            PowerArg::Battery => PowerProfileChoice::BatteryCare,
+            PowerArg::None => PowerProfileChoice::None,
+        };
+        if config.power_profile != PowerProfileChoice::None && !config.selected_components.contains(&Component::PowerOptimization) {
+            config.selected_components.push(Component::PowerOptimization);
+        }
+    }
+    if let Some(fw) = args.firewall {
+        config.security_firewall = match fw {
+            FirewallArg::Ufw => FirewallChoice::UfwHardened,
+            FirewallArg::Firewalld => FirewallChoice::Firewalld,
+            FirewallArg::None => FirewallChoice::None,
+        };
+    }
+    if let Some(dns) = args.dns {
+        config.dns_privacy = match dns {
+            DnsArg::Quad9 => DnsPrivacyChoice::Quad9,
+            DnsArg::Cloudflare => DnsPrivacyChoice::Cloudflare,
+            DnsArg::AdGuard => DnsPrivacyChoice::AdGuard,
+            DnsArg::System => DnsPrivacyChoice::SystemDefault,
+        };
+    }
+    if args.mac_randomize {
+        config.mac_randomization = true;
+    }
+    if let Some(c) = args.cursor {
+        config.cursor_theme = match c {
+            CursorArg::Nordzy => CursorThemeChoice::Nordzy,
+            CursorArg::Bibata => CursorThemeChoice::BibataModern,
+            CursorArg::Catppuccin => CursorThemeChoice::CatppuccinMocha,
+            CursorArg::Breeze => CursorThemeChoice::Breeze,
+        };
+    }
+    if let Some(i) = args.icons {
+        config.icon_theme = match i {
+            IconArg::Papirus => IconThemeChoice::PapirusDark,
+            IconArg::Tela => IconThemeChoice::TelaCircle,
+            IconArg::WhiteSur => IconThemeChoice::WhiteSur,
+            IconArg::Fluent => IconThemeChoice::FluentDark,
+        };
+    }
+    if let Some(v) = args.virt {
+        config.virtualization = match v {
+            VirtArg::Qemu => VirtualizationChoice::QemuKvm,
+            VirtArg::Docker => VirtualizationChoice::DockerPodman,
+            VirtArg::None => VirtualizationChoice::None,
+        };
+        if config.virtualization != VirtualizationChoice::None && !config.selected_components.contains(&Component::Virtualization) {
+            config.selected_components.push(Component::Virtualization);
+        }
+    }
+    if args.no_snapshot {
+        config.btrfs_snapshot = false;
+    }
+    if args.no_maintenance {
+        config.auto_maintenance = false;
+    }
+    if args.proton_ge {
+        config.proton_ge = true;
+    }
     if let Some(theme) = args.theme {
         config.theme_name = theme;
     }
@@ -254,6 +338,8 @@ fn print_diagnostics_report(info: &DistroInfo) {
     println!("================================================================================");
     println!("Operating System:    {}", info.distro_flavor);
     println!("Distro Family:       {}", info.family.label());
+    println!("Hardware Chassis:    {}", if info.is_laptop { format!("Laptop ({:?}% Battery)", info.battery_percent.unwrap_or(100)) } else { "Desktop Workstation".to_string() });
+    println!("Root Filesystem:     {}", if info.is_btrfs { "Btrfs (Snapshots Supported)" } else { "Standard Linux FS" });
     println!("Kernel Version:      {} ({})", info.kernel, info.arch);
     println!("Firmware Mode:       {}", if info.is_uefi { "UEFI Mode (Optimal)" } else { "Legacy BIOS" });
     println!("Processor (CPU):     {} ({} cores)", info.cpu_model, info.cpu_cores);
@@ -318,6 +404,16 @@ fn run_headless(state: &mut AppState) {
     println!("Audio Suite:         {}", state.config.audio_suite.label());
     println!("Kernel Tweaks:       {}", state.config.kernel_tweaks.label());
     println!("Shell Choice:        {}", state.config.shell_choice.label());
+    println!("Window Effects:      {}", state.config.window_effects.label());
+    println!("Power Profile:       {}", state.config.power_profile.label());
+    println!("Firewall:            {}", state.config.security_firewall.label());
+    println!("Privacy DNS:         {}", state.config.dns_privacy.label());
+    println!("Cursor Theme:        {}", state.config.cursor_theme.label());
+    println!("Icon Theme:          {}", state.config.icon_theme.label());
+    println!("Virtualization:      {}", state.config.virtualization.label());
+    println!("Btrfs Snapshot:      {}", state.config.btrfs_snapshot);
+    println!("Auto Maintenance:    {}", state.config.auto_maintenance);
+    println!("Proton-GE Setup:     {}", state.config.proton_ge);
     println!("Theme:               {}", state.config.theme_name);
     let all_pkgs = state.selected_distro.all_packages();
     let enabled_count = all_pkgs.iter().filter(|&&p| state.config.is_package_enabled(p)).count();
@@ -445,12 +541,48 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.refresh_steps();
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                let next = match state.config.preset {
-                    InstallPreset::FullRice => InstallPreset::MinimalRice,
-                    InstallPreset::MinimalRice => InstallPreset::Custom,
-                    InstallPreset::Custom => InstallPreset::FullRice,
-                };
+                let next = state.config.preset.cycle();
                 state.config.apply_preset(next);
+                state.refresh_steps();
+            }
+            KeyCode::Char('1') => {
+                state.config.power_profile = state.config.power_profile.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('2') => {
+                state.config.window_effects = state.config.window_effects.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('3') => {
+                state.config.cursor_theme = state.config.cursor_theme.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('4') => {
+                state.config.icon_theme = state.config.icon_theme.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('5') => {
+                state.config.security_firewall = state.config.security_firewall.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('6') => {
+                state.config.dns_privacy = state.config.dns_privacy.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('7') => {
+                state.config.virtualization = state.config.virtualization.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('8') => {
+                state.config.btrfs_snapshot = !state.config.btrfs_snapshot;
+                state.refresh_steps();
+            }
+            KeyCode::Char('9') => {
+                state.config.auto_maintenance = !state.config.auto_maintenance;
+                state.refresh_steps();
+            }
+            KeyCode::Char('0') => {
+                state.config.mac_randomization = !state.config.mac_randomization;
                 state.refresh_steps();
             }
             KeyCode::Char('v') | KeyCode::Char('V') => {
@@ -572,11 +704,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     state.config.dry_run = !state.config.dry_run;
                 }
                 ConfigSection::Preset => {
-                    let next = match state.config.preset {
-                        InstallPreset::FullRice => InstallPreset::MinimalRice,
-                        InstallPreset::MinimalRice => InstallPreset::Custom,
-                        InstallPreset::Custom => InstallPreset::FullRice,
-                    };
+                    let next = state.config.preset.cycle();
                     state.config.apply_preset(next);
                     state.refresh_steps();
                 }
@@ -782,6 +910,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         },
 
         AppScreen::Complete => match code {
+            KeyCode::Char('v') | KeyCode::Char('V') => {
+                state.current_screen = AppScreen::Diagnostics;
+            }
             KeyCode::Enter | KeyCode::Char('q') | KeyCode::Char('Q') => {
                 state.should_exit = true;
             }

@@ -929,11 +929,387 @@ env = GBM_BACKEND,nvidia-drm\n";
             apply_theme(config, runner)
         }
 
+        // --- EXTRAORDINARY FEATURES ---
+        "btrfs_snapshot" => {
+            setup_btrfs_snapshot(config, runner)
+        }
+        "power_optimization" => {
+            setup_power_optimization(config, runner)
+        }
+        "security_hardening" => {
+            setup_security_hardening(config, runner)
+        }
+        "window_effects" => {
+            setup_window_effects(config, runner)
+        }
+        "cursor_icon_themes" => {
+            setup_cursor_icon_themes(config, runner)
+        }
+        "virtualization_setup" => {
+            setup_virtualization(config, runner)
+        }
+        "proton_ge_setup" => {
+            setup_proton_ge(config, runner)
+        }
+        "system_maintenance" => {
+            setup_system_maintenance(config, runner)
+        }
+
         _ => {
             runner.log_info(format!("Completed step: {step_id}"));
             Ok(())
         }
     }
+}
+
+fn setup_btrfs_snapshot(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    if !config.btrfs_snapshot {
+        runner.log_info("Btrfs snapshot disabled by configuration.");
+        return Ok(());
+    }
+
+    let is_btrfs = fs::read_to_string("/proc/mounts")
+        .map(|content| {
+            content.lines().any(|line| {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                parts.len() >= 3 && (parts[1] == "/" || parts[1] == "/home") && parts[2] == "btrfs"
+            })
+        })
+        .unwrap_or(false);
+
+    if !is_btrfs && !runner.dry_run {
+        runner.log_info("Root or home filesystem is not Btrfs; skipping subvolume snapshot.");
+        return Ok(());
+    }
+
+    let ts = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let snap_target = format!("/.aurora_pre_install_snapshot_{ts}");
+    runner.log_info(format!("Creating instant Btrfs rollback snapshot at {snap_target}..."));
+    let _ = runner.run_command("sudo", &["btrfs", "subvolume", "snapshot", "-r", "/", &snap_target]);
+    runner.log_success(format!("Pre-installation Btrfs rollback snapshot created: {snap_target}"));
+    Ok(())
+}
+
+fn setup_power_optimization(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    runner.log_info(format!("Configuring Power Profile: {}...", config.power_profile.label()));
+    match config.power_profile {
+        crate::model::config::PowerProfileChoice::Performance => {
+            let _ = runner.run_command("sudo", &["powerprofilesctl", "set", "performance"]);
+            runner.log_success("Performance power profile applied.");
+        }
+        crate::model::config::PowerProfileChoice::BatteryCare => {
+            let _ = runner.run_command("sudo", &["powerprofilesctl", "set", "power-saver"]);
+            let _ = runner.run_command("sh", &["-c", "for f in /sys/class/power_supply/BAT*/charge_control_end_threshold; do [ -f \"$f\" ] && echo 80 | sudo tee \"$f\" >/dev/null; done"]);
+            runner.log_success("BatteryCare profile configured with 80% charge threshold.");
+        }
+        crate::model::config::PowerProfileChoice::Balanced => {
+            let _ = runner.run_command("sudo", &["powerprofilesctl", "set", "balanced"]);
+            runner.log_success("Balanced power profile applied.");
+        }
+        crate::model::config::PowerProfileChoice::None => {
+            runner.log_info("Keeping existing system power configuration.");
+        }
+    }
+    Ok(())
+}
+
+fn setup_security_hardening(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    runner.log_info("Applying Desktop Security & Privacy Hardening...");
+
+    // 1. Firewall
+    match config.security_firewall {
+        crate::model::config::FirewallChoice::UfwHardened => {
+            runner.log_info("Configuring UFW desktop firewall rules...");
+            let _ = runner.run_command("sudo", &["ufw", "default", "deny", "incoming"]);
+            let _ = runner.run_command("sudo", &["ufw", "default", "allow", "outgoing"]);
+            let _ = runner.run_command("sudo", &["ufw", "allow", "53317/tcp"]); // LocalSend
+            let _ = runner.run_command("sudo", &["ufw", "allow", "53317/udp"]);
+            let _ = runner.run_command("sudo", &["ufw", "allow", "1714:1764/udp"]); // KDE Connect
+            let _ = runner.run_command("sudo", &["ufw", "allow", "1714:1764/tcp"]);
+            let _ = runner.run_command("sudo", &["ufw", "allow", "5353/udp"]); // mDNS
+            let _ = runner.run_command("sudo", &["ufw", "--force", "enable"]);
+            let _ = runner.run_command("sudo", &["systemctl", "enable", "--now", "ufw.service"]);
+            runner.log_success("UFW desktop firewall configured and active.");
+        }
+        crate::model::config::FirewallChoice::Firewalld => {
+            runner.log_info("Configuring firewalld home/desktop zone...");
+            let _ = runner.run_command("sudo", &["firewall-cmd", "--set-default-zone=home"]);
+            let _ = runner.run_command("sudo", &["firewall-cmd", "--reload"]);
+            runner.log_success("Firewalld configured.");
+        }
+        crate::model::config::FirewallChoice::None => {}
+    }
+
+    // 2. Privacy DNS (systemd-resolved)
+    match config.dns_privacy {
+        crate::model::config::DnsPrivacyChoice::Quad9 => {
+            runner.log_info("Configuring Quad9 (9.9.9.9) privacy & threat blocking DNS...");
+            let content = "[Resolve]\nDNS=9.9.9.9 149.112.112.112 2620:fe::fe 2620:fe::9\nDomains=~.\nDNSSEC=yes\nDNSOverTLS=yes\n";
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/etc/systemd/resolved.conf.d"]);
+            let _ = runner.run_command("sh", &["-c", &format!("cat << 'EOF' | sudo tee /etc/systemd/resolved.conf.d/00-aurora-dns.conf >/dev/null\n{content}EOF")]);
+            let _ = runner.run_command("sudo", &["systemctl", "restart", "systemd-resolved.service"]);
+            runner.log_success("Quad9 Privacy DNS configured with DNS-over-TLS.");
+        }
+        crate::model::config::DnsPrivacyChoice::Cloudflare => {
+            runner.log_info("Configuring Cloudflare (1.1.1.1) fast DoH DNS...");
+            let content = "[Resolve]\nDNS=1.1.1.1 1.0.0.1 2606:4700:4700::1111 2606:4700:4700::1001\nDomains=~.\nDNSSEC=yes\nDNSOverTLS=yes\n";
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/etc/systemd/resolved.conf.d"]);
+            let _ = runner.run_command("sh", &["-c", &format!("cat << 'EOF' | sudo tee /etc/systemd/resolved.conf.d/00-aurora-dns.conf >/dev/null\n{content}EOF")]);
+            let _ = runner.run_command("sudo", &["systemctl", "restart", "systemd-resolved.service"]);
+            runner.log_success("Cloudflare DNS configured.");
+        }
+        crate::model::config::DnsPrivacyChoice::AdGuard => {
+            runner.log_info("Configuring AdGuard ad-blocking DNS...");
+            let content = "[Resolve]\nDNS=94.140.14.14 94.140.15.15\nDomains=~.\nDNSOverTLS=yes\n";
+            let _ = runner.run_command("sudo", &["mkdir", "-p", "/etc/systemd/resolved.conf.d"]);
+            let _ = runner.run_command("sh", &["-c", &format!("cat << 'EOF' | sudo tee /etc/systemd/resolved.conf.d/00-aurora-dns.conf >/dev/null\n{content}EOF")]);
+            let _ = runner.run_command("sudo", &["systemctl", "restart", "systemd-resolved.service"]);
+            runner.log_success("AdGuard DNS configured.");
+        }
+        crate::model::config::DnsPrivacyChoice::SystemDefault => {}
+    }
+
+    // 3. NetworkManager MAC Randomization
+    if config.mac_randomization {
+        runner.log_info("Enabling WiFi & Ethernet MAC address randomization...");
+        let content = "[device]\nwifi.scan-rand-mac-address=yes\n\n[connection]\nwifi.cloned-mac-address=random\nethernet.cloned-mac-address=random\n";
+        let _ = runner.run_command("sudo", &["mkdir", "-p", "/etc/NetworkManager/conf.d"]);
+        let _ = runner.run_command("sh", &["-c", &format!("cat << 'EOF' | sudo tee /etc/NetworkManager/conf.d/00-aurora-mac-randomization.conf >/dev/null\n{content}EOF")]);
+        runner.log_success("NetworkManager MAC randomization configured.");
+    }
+
+    Ok(())
+}
+
+fn setup_window_effects(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    runner.log_info(format!("Generating Hyprland Window Effects Config: {}...", config.window_effects.label()));
+    if let Some(home) = dirs_home() {
+        let hypr_dir = home.join(".config/hypr");
+        if !runner.dry_run {
+            let _ = fs::create_dir_all(&hypr_dir);
+        }
+
+        let effects_file = hypr_dir.join("aurora_effects.conf");
+        let effects_content = match config.window_effects {
+            crate::model::config::WindowEffectsChoice::FrostedGlass => {
+                "# Aurora Frosted Glass Preset (Signature Look)\n\
+                 decoration {\n\
+                     rounding = 12\n\
+                     active_opacity = 0.90\n\
+                     inactive_opacity = 0.82\n\
+                     blur {\n\
+                         enabled = true\n\
+                         size = 8\n\
+                         passes = 3\n\
+                         new_optimizations = true\n\
+                         noise = 0.015\n\
+                         contrast = 1.0\n\
+                         brightness = 1.0\n\
+                     }\n\
+                     shadow {\n\
+                         enabled = true\n\
+                         range = 16\n\
+                         render_power = 3\n\
+                         color = rgba(00000044)\n\
+                     }\n\
+                 }\n"
+            }
+            crate::model::config::WindowEffectsChoice::CyberpunkNeon => {
+                "# Aurora Cyberpunk Neon Preset\n\
+                 general {\n\
+                     border_size = 2\n\
+                     col.active_border = rgb(ff007f) rgb(00f0ff) 45deg\n\
+                     col.inactive_border = rgb(1f1a2e)\n\
+                 }\n\
+                 decoration {\n\
+                     rounding = 8\n\
+                     active_opacity = 0.95\n\
+                     inactive_opacity = 0.88\n\
+                     blur {\n\
+                         enabled = true\n\
+                         size = 5\n\
+                         passes = 2\n\
+                     }\n\
+                     shadow {\n\
+                         enabled = true\n\
+                         range = 20\n\
+                         render_power = 3\n\
+                         color = rgba(ff007f88)\n\
+                     }\n\
+                 }\n"
+            }
+            crate::model::config::WindowEffectsChoice::OledPureBlack => {
+                "# Aurora OLED Pure Black Preset (Maximum Battery & Contrast)\n\
+                 general {\n\
+                     border_size = 2\n\
+                     col.active_border = rgb(777777)\n\
+                     col.inactive_border = rgb(111111)\n\
+                 }\n\
+                 decoration {\n\
+                     rounding = 6\n\
+                     active_opacity = 1.0\n\
+                     inactive_opacity = 1.0\n\
+                     blur {\n\
+                         enabled = false\n\
+                     }\n\
+                     shadow {\n\
+                         enabled = false\n\
+                     }\n\
+                 }\n"
+            }
+            crate::model::config::WindowEffectsChoice::MinimalFlat => {
+                "# Aurora Minimal Flat Preset (Ultra-Low Overhead)\n\
+                 general {\n\
+                     border_size = 1\n\
+                     col.active_border = rgb(555555)\n\
+                     col.inactive_border = rgb(222222)\n\
+                 }\n\
+                 decoration {\n\
+                     rounding = 0\n\
+                     active_opacity = 1.0\n\
+                     inactive_opacity = 1.0\n\
+                     blur {\n\
+                         enabled = false\n\
+                     }\n\
+                     shadow {\n\
+                         enabled = false\n\
+                     }\n\
+                 }\n"
+            }
+        };
+
+        if !runner.dry_run {
+            let _ = fs::write(&effects_file, effects_content);
+            let hypr_conf = hypr_dir.join("hyprland.conf");
+            if hypr_conf.exists() {
+                let mut conf_txt = fs::read_to_string(&hypr_conf).unwrap_or_default();
+                if !conf_txt.contains("aurora_effects.conf") {
+                    conf_txt.push_str("\nsource = ~/.config/hypr/aurora_effects.conf\n");
+                    let _ = fs::write(&hypr_conf, conf_txt);
+                }
+            }
+        }
+        runner.log_success(format!("Window effects written to {}", effects_file.display()));
+    }
+    Ok(())
+}
+
+fn setup_cursor_icon_themes(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    let cursor_name = config.cursor_theme.theme_name();
+    let icon_name = config.icon_theme.theme_name();
+    runner.log_info(format!("Configuring Cursor Theme ({cursor_name}) and Icon Theme ({icon_name})..."));
+
+    if let Some(home) = dirs_home() {
+        let icons_default = home.join(".icons/default");
+        if !runner.dry_run {
+            let _ = fs::create_dir_all(&icons_default);
+            let index_theme = format!("[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits={cursor_name}\n");
+            let _ = fs::write(icons_default.join("index.theme"), index_theme);
+        }
+
+        let _ = runner.run_command("gsettings", &["set", "org.gnome.desktop.interface", "cursor-theme", cursor_name]);
+        let _ = runner.run_command("gsettings", &["set", "org.gnome.desktop.interface", "icon-theme", icon_name]);
+
+        let hypr_conf = home.join(".config/hypr/hyprland.conf");
+        if !runner.dry_run && hypr_conf.exists() {
+            let mut conf_txt = fs::read_to_string(&hypr_conf).unwrap_or_default();
+            let cursor_env = format!("\nenv = XCURSOR_THEME,{cursor_name}\nenv = XCURSOR_SIZE,24\n");
+            if !conf_txt.contains("XCURSOR_THEME") {
+                conf_txt.push_str(&cursor_env);
+                let _ = fs::write(&hypr_conf, conf_txt);
+            }
+        }
+        runner.log_success(format!("Applied cursor theme '{cursor_name}' and icon theme '{icon_name}'."));
+    }
+    Ok(())
+}
+
+fn setup_virtualization(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    match config.virtualization {
+        crate::model::config::VirtualizationChoice::QemuKvm => {
+            runner.log_info("Setting up QEMU / KVM virtualization services...");
+            let _ = runner.run_command("sudo", &["systemctl", "enable", "--now", "libvirtd.service"]);
+            let user = std::env::var("USER").unwrap_or_else(|_| "ahummaitra".to_string());
+            let _ = runner.run_command("sudo", &["usermod", "-aG", "libvirt,kvm", &user]);
+            let _ = runner.run_command("sudo", &["virsh", "net-autostart", "default"]);
+            runner.log_success("QEMU/KVM & libvirtd service configured for user.");
+        }
+        crate::model::config::VirtualizationChoice::DockerPodman => {
+            runner.log_info("Setting up Docker / Podman container services...");
+            let _ = runner.run_command("sudo", &["systemctl", "enable", "--now", "docker.service"]);
+            let user = std::env::var("USER").unwrap_or_else(|_| "ahummaitra".to_string());
+            let _ = runner.run_command("sudo", &["usermod", "-aG", "docker", &user]);
+            runner.log_success("Docker service enabled with user permissions.");
+        }
+        crate::model::config::VirtualizationChoice::None => {}
+    }
+    Ok(())
+}
+
+fn setup_proton_ge(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    if !config.proton_ge {
+        return Ok(());
+    }
+    runner.log_info("Configuring Proton-GE & Steam Gaming Enhancements...");
+    if let Some(home) = dirs_home() {
+        let steam_compat = home.join(".steam/root/compatibilitytools.d");
+        let local_compat = home.join(".local/share/Steam/compatibilitytools.d");
+        if !runner.dry_run {
+            let _ = fs::create_dir_all(&steam_compat);
+            let _ = fs::create_dir_all(&local_compat);
+        }
+
+        let mangohud_dir = home.join(".config/MangoHud");
+        if !runner.dry_run {
+            let _ = fs::create_dir_all(&mangohud_dir);
+            let mangohud_conf = "# Aurora MangoHud Gaming Overlay\n\
+                                 fps\n\
+                                 frametime\n\
+                                 cpu_stats\n\
+                                 cpu_temp\n\
+                                 gpu_stats\n\
+                                 gpu_temp\n\
+                                 ram\n\
+                                 vram\n\
+                                 round_corners=10\n\
+                                 background_alpha=0.6\n\
+                                 font_size=20\n";
+            let _ = fs::write(mangohud_dir.join("MangoHud.conf"), mangohud_conf);
+        }
+        runner.log_success("Proton-GE compatibility directory and MangoHud configuration ready.");
+    }
+    Ok(())
+}
+
+fn setup_system_maintenance(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    if !config.auto_maintenance {
+        return Ok(());
+    }
+    runner.log_info("Deploying Automated System Maintenance & Health Timers...");
+    if let Some(home) = dirs_home() {
+        let systemd_user = home.join(".config/systemd/user");
+        if !runner.dry_run {
+            let _ = fs::create_dir_all(&systemd_user);
+            let service_content = "[Unit]\n\
+                                   Description=Aurora Weekly System Maintenance\n\n\
+                                   [Service]\n\
+                                   Type=oneshot\n\
+                                   ExecStart=/bin/sh -c 'which fstrim >/dev/null && sudo fstrim -v /; which paccache >/dev/null && paccache -rk2; which dnf >/dev/null && sudo dnf clean packages -y; which nix-collect-garbage >/dev/null && nix-collect-garbage -d'\n";
+            let timer_content = "[Unit]\n\
+                                 Description=Aurora Weekly Maintenance Timer\n\n\
+                                 [Timer]\n\
+                                 OnCalendar=weekly\n\
+                                 Persistent=true\n\n\
+                                 [Install]\n\
+                                 WantedBy=timers.target\n";
+            let _ = fs::write(systemd_user.join("aurora-maintenance.service"), service_content);
+            let _ = fs::write(systemd_user.join("aurora-maintenance.timer"), timer_content);
+        }
+        let _ = runner.run_command("systemctl", &["--user", "daemon-reload"]);
+        let _ = runner.run_command("systemctl", &["--user", "enable", "--now", "aurora-maintenance.timer"]);
+        runner.log_success("Aurora weekly maintenance systemd timer active.");
+    }
+    Ok(())
 }
 
 fn deploy_neovim_preset(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {

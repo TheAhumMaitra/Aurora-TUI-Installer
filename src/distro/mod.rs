@@ -269,6 +269,9 @@ pub struct DistroInfo {
     pub git_available: bool,
     pub cargo_available: bool,
     pub hyprland_running: bool,
+    pub is_laptop: bool,
+    pub battery_percent: Option<u8>,
+    pub is_btrfs: bool,
 }
 
 impl DistroInfo {
@@ -370,6 +373,35 @@ impl DistroInfo {
                 .map(|v| v.to_lowercase().contains("hyprland"))
                 .unwrap_or(false);
 
+        let (is_laptop, battery_percent) = {
+            let mut found_laptop = false;
+            let mut batt_pct = None;
+            if let Ok(entries) = fs::read_dir("/sys/class/power_supply") {
+                for entry in entries.flatten() {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    if name.starts_with("BAT") {
+                        found_laptop = true;
+                        if let Ok(cap_str) = fs::read_to_string(entry.path().join("capacity")) {
+                            if let Ok(val) = cap_str.trim().parse::<u8>() {
+                                batt_pct = Some(val);
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+            (found_laptop, batt_pct)
+        };
+
+        let is_btrfs = fs::read_to_string("/proc/mounts")
+            .map(|content| {
+                content.lines().any(|line| {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    parts.len() >= 3 && (parts[1] == "/" || parts[1] == "/home") && parts[2] == "btrfs"
+                })
+            })
+            .unwrap_or(false);
+
         Self {
             family,
             id,
@@ -401,6 +433,9 @@ impl DistroInfo {
             git_available,
             cargo_available,
             hyprland_running,
+            is_laptop,
+            battery_percent,
+            is_btrfs,
         }
     }
 }
