@@ -68,6 +68,8 @@ pub struct AppState {
     pub package_category_cursor: usize,
     pub package_item_cursor: usize,
     pub package_side_packages: bool,
+    pub package_search_query: String,
+    pub package_search_active: bool,
     pub is_installing: bool,
     pub install_finished: bool,
     pub install_success: bool,
@@ -100,6 +102,8 @@ impl AppState {
             package_category_cursor: 0,
             package_item_cursor: 0,
             package_side_packages: false,
+            package_search_query: String::new(),
+            package_search_active: false,
             is_installing: false,
             install_finished: false,
             install_success: false,
@@ -125,6 +129,25 @@ impl AppState {
                 DistroFamily::Unknown => Vec::new(),
             }
         };
+    }
+
+    pub fn current_filtered_packages(&self) -> Vec<&'static str> {
+        let groups = crate::distro::arch::ARCH_PACKAGE_GROUPS;
+        if let Some(group) = groups.get(self.package_category_cursor) {
+            let q = self.package_search_query.trim().to_lowercase();
+            if q.is_empty() {
+                group.packages.to_vec()
+            } else {
+                group
+                    .packages
+                    .iter()
+                    .copied()
+                    .filter(|pkg| pkg.to_lowercase().contains(&q))
+                    .collect()
+            }
+        } else {
+            Vec::new()
+        }
     }
 
     #[allow(dead_code)]

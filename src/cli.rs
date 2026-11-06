@@ -120,6 +120,28 @@ pub enum TweaksArg {
     Standard,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum FontArg {
+    #[value(name = "jetbrains")]
+    JetBrainsMono,
+    #[value(name = "fira")]
+    FiraCode,
+    #[value(name = "cascadia")]
+    CascadiaCode,
+    #[value(name = "hack")]
+    Hack,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LockscreenArg {
+    #[value(name = "hyprlock")]
+    Hyprlock,
+    #[value(name = "swaylock")]
+    SwaylockEffects,
+    #[value(name = "none")]
+    None,
+}
+
 /// Aurora TUI Installer tailored for Arch Linux and Arch-based distributions
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -185,6 +207,22 @@ pub struct CliArgs {
     /// Choose kernel and process scheduler optimization (performance, standard)
     #[arg(long, value_enum)]
     pub tweaks: Option<TweaksArg>,
+
+    /// Choose system monospace font family (jetbrains, fira, cascadia, hack)
+    #[arg(long, value_enum)]
+    pub font: Option<FontArg>,
+
+    /// Choose Wayland lockscreen daemon (hyprlock, swaylock, none)
+    #[arg(long, value_enum)]
+    pub lockscreen: Option<LockscreenArg>,
+
+    /// Comma-separated list of explicit packages to install (e.g. hyprland,waybar,kitty)
+    #[arg(long, value_delimiter = ',')]
+    pub packages: Option<Vec<String>>,
+
+    /// Comma-separated list of specific packages to exclude from installation
+    #[arg(long, value_delimiter = ',')]
+    pub exclude_packages: Option<Vec<String>>,
 
     /// Enable gaming and performance suite (Steam, GameMode, MangoHud)
     #[arg(long, default_value_t = false)]

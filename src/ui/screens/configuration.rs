@@ -30,7 +30,7 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([
             Constraint::Length(5), // 1. Preset & Package Shortcuts
             Constraint::Length(5), // 2. Developer Suite & Web Core
-            Constraint::Length(5), // 3. Rice Aesthetics (Bar, Launcher, DM, Motion)
+            Constraint::Length(7), // 3. Rice Aesthetics (Bar, Launcher, DM, Motion, Lock, Font)
             Constraint::Min(6),    // 4. Theme picker with live palette swatches
             Constraint::Length(5), // 5. Audio, Kernel & Flags
         ])
@@ -71,7 +71,7 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled("[A] ", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
             Span::styled("Select All Packages   ", Style::default().fg(COLOR_WHITE)),
             Span::styled("[X] ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
-            Span::styled("Deselect All Packages", Style::default().fg(COLOR_WHITE)),
+            Span::styled("Deselect All Packages (Clean Slate)", Style::default().fg(COLOR_WHITE)),
         ]),
         Line::from(Span::styled(
             state.config.preset.description(),
@@ -122,10 +122,10 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     .block(dev_block.padding(Padding::horizontal(1)));
     f.render_widget(dev_p, chunks[1]);
 
-    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Motion)
+    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Lockscreen, Font, Motion)
     let aes_active = state.active_config_section == ConfigSection::Aesthetics;
     let aes_block = if aes_active {
-        active_block(" 3. Desktop Rice Aesthetics [B: Waybar, R: Rofi, L: Login, O: Motion] ")
+        active_block(" 3. Desktop Rice Aesthetics [B: Bar, R: Rofi, C: Lock, F: Font, L: DM, O: Anim] ")
     } else {
         default_block(" 3. Desktop Rice Aesthetics ")
     };
@@ -134,18 +134,33 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         Line::from(vec![
             Span::styled("Waybar:      ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
-                state.config.bar_layout.label(),
+                state.config.bar_layout.short_name(),
                 Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" [B]", Style::default().fg(COLOR_DARK)),
-        ]),
-        Line::from(vec![
-            Span::styled("Launcher:    ", Style::default().fg(COLOR_CYAN)),
+            Span::raw("   "),
+            Span::styled("Launcher: ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
-                state.config.launcher_style.label(),
+                state.config.launcher_style.short_name(),
                 Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" [R]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Lockscreen:  ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.lockscreen.label(),
+                Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [C]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Mono Font:   ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.font_choice.label(),
+                Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [F]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
             Span::styled("Display Mgr: ", Style::default().fg(COLOR_CYAN)),

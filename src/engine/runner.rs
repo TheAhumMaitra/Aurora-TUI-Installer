@@ -297,14 +297,32 @@ fn execute_single_step(
                 pkgs.push(term_pkg);
             }
 
+            let font_pkg = config.font_choice.package_name();
+            if !pkgs.contains(&font_pkg) {
+                pkgs.push(font_pkg);
+            }
+
             // Filter out packages disabled by the user
             pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+
+            if pkgs.is_empty() {
+                runner.log_info("No pacman packages selected, skipping official packages stage.");
+                return Ok(());
+            }
 
             let mut args = vec!["pacman", "-S", "--needed", "--noconfirm"];
             args.extend(pkgs);
             runner.run_command("sudo", &args)
         }
         "arch_aur" => {
+            let mut aur_pkgs: Vec<&str> = arch::YAY_AUR_PACKAGES.to_vec();
+            aur_pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+
+            if aur_pkgs.is_empty() {
+                runner.log_info("No AUR packages selected, skipping AUR stage.");
+                return Ok(());
+            }
+
             let aur_bin = if which::which("paru").is_ok() {
                 "paru"
             } else if which::which("yay").is_ok() {
@@ -318,8 +336,6 @@ fn execute_single_step(
                 "yay"
             };
             runner.log_info(format!("Using AUR helper ({aur_bin}) for rice extras..."));
-            let mut aur_pkgs: Vec<&str> = arch::YAY_AUR_PACKAGES.to_vec();
-            aur_pkgs.retain(|&pkg| config.is_package_enabled(pkg));
 
             let mut args = vec!["-S", "--needed", "--noconfirm"];
             args.extend(aur_pkgs);
@@ -341,9 +357,15 @@ fn execute_single_step(
             Ok(())
         }
         "arch_gaming" => {
+            let mut gaming_pkgs: Vec<&str> = arch::ARCH_GAMING_PACKAGES.to_vec();
+            gaming_pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+            if gaming_pkgs.is_empty() {
+                runner.log_info("No gaming packages selected, skipping gaming install.");
+                return Ok(());
+            }
             runner.log_info("Installing Steam, GameMode, and MangoHud gaming packages...");
             let mut args = vec!["pacman", "-S", "--needed", "--noconfirm"];
-            args.extend_from_slice(arch::ARCH_GAMING_PACKAGES);
+            args.extend(gaming_pkgs);
             runner.run_command("sudo", &args).or_else(|_| {
                 runner.log_warn("Some gaming packages could not be installed (ensure multilib is enabled in /etc/pacman.conf)");
                 Ok(())
@@ -454,6 +476,11 @@ fn execute_single_step(
             let term_pkg = config.terminal_choice.package_name();
             if !pkgs.contains(&term_pkg) {
                 pkgs.push(term_pkg);
+            }
+
+            let font_pkg = config.font_choice.package_name();
+            if !pkgs.contains(&font_pkg) {
+                pkgs.push(font_pkg);
             }
 
             pkgs.retain(|&pkg| config.is_package_enabled(pkg));

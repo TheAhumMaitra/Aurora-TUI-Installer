@@ -107,7 +107,94 @@ pub const ARCH_GAMING_PACKAGES: &[&str] = &[
     "gamescope",
 ];
 
+pub const ALL_ARCH_PACKAGES: &[&str] = &[
+    "alacritty",
+    "awww",
+    "base-devel",
+    "bluetui",
+    "brightnessctl",
+    "btop",
+    "clang",
+    "cliphist",
+    "cmake",
+    "curl",
+    "eog",
+    "evince",
+    "foot",
+    "gamemode",
+    "gamescope",
+    "ghostty",
+    "git",
+    "glib2",
+    "gtk3",
+    "gtk4",
+    "hypridle",
+    "hyprland",
+    "hyprlock",
+    "hyprmoncfg-bin",
+    "hyprshot",
+    "hyprshutdown",
+    "hyprwave",
+    "jolt",
+    "kitty",
+    "leenfetch",
+    "libnotify",
+    "llvm",
+    "mangohud",
+    "mise",
+    "nemo",
+    "neovim",
+    "networkmanager",
+    "nordzy-hyprcursors",
+    "noto-fonts",
+    "noto-fonts-emoji",
+    "papirus-icon-theme",
+    "parole",
+    "pipewire",
+    "pipewire-pulse",
+    "pkg-config",
+    "polkit-gnome",
+    "qt6-multimedia",
+    "qt6-multimedia-ffmpeg",
+    "qt6-svg",
+    "qt6-virtualkeyboard",
+    "quickshell",
+    "rofi",
+    "rofi-emoji",
+    "sddm",
+    "snappy-switcher",
+    "starship",
+    "steam",
+    "sudo-rs",
+    "swaylock",
+    "swaync",
+    "ttf-cascadia-code-nerd",
+    "ttf-dejavu",
+    "ttf-firacode-nerd",
+    "ttf-hack-nerd",
+    "ttf-jetbrains-mono-nerd",
+    "unzip",
+    "uv",
+    "waybar",
+    "weathr-bin",
+    "wget",
+    "wiremix",
+    "wireplumber",
+    "wl-clipboard",
+    "wlogout",
+    "xcb-util-cursor",
+    "xdg-desktop-portal-hyprland",
+    "yaru-gtk-theme",
+    "yaru-icon-theme",
+    "zen-browser-bin",
+];
+
 pub const ARCH_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
+    DistroPackageGroup {
+        category: "★ All Packages (Unified)",
+        description: "Browse, search & select any specific packages across all categories in one view",
+        packages: ALL_ARCH_PACKAGES,
+    },
     DistroPackageGroup {
         category: "Core Compositor",
         description: "Hyprland compositor, XDG portals, pipewire audio and session manager",
@@ -145,12 +232,30 @@ pub const ARCH_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
     },
 ];
 
-pub fn all_arch_packages() -> Vec<&'static str> {
-    let mut all = Vec::new();
-    for group in ARCH_PACKAGE_GROUPS {
-        all.extend_from_slice(group.packages);
+pub fn package_category_badge(pkg: &str) -> &'static str {
+    if pkg.starts_with("ttf-") || pkg.starts_with("noto-") {
+        "Font"
+    } else if PACMAN_CORE.contains(&pkg) {
+        "Core"
+    } else if PACMAN_DAEMONS.contains(&pkg) {
+        "Daemon"
+    } else if PACMAN_UI.contains(&pkg) {
+        "UI"
+    } else if PACMAN_UTILS.contains(&pkg) {
+        "Utils"
+    } else if PACMAN_BUILD.contains(&pkg) {
+        "Build"
+    } else if YAY_AUR_PACKAGES.contains(&pkg) {
+        "AUR"
+    } else if ARCH_GAMING_PACKAGES.contains(&pkg) {
+        "Gaming"
+    } else {
+        "Extra"
     }
-    all
+}
+
+pub fn all_arch_packages() -> Vec<&'static str> {
+    ALL_ARCH_PACKAGES.to_vec()
 }
 
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
@@ -298,4 +403,34 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     ));
 
     steps
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_all_arch_packages_sorted_and_unique() {
+        let pkgs = ALL_ARCH_PACKAGES;
+        for i in 1..pkgs.len() {
+            assert!(
+                pkgs[i - 1] < pkgs[i],
+                "ALL_ARCH_PACKAGES is not sorted or has duplicates: {} >= {}",
+                pkgs[i - 1],
+                pkgs[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_package_category_badge() {
+        assert_eq!(package_category_badge("hyprland"), "Core");
+        assert_eq!(package_category_badge("hypridle"), "Daemon");
+        assert_eq!(package_category_badge("waybar"), "UI");
+        assert_eq!(package_category_badge("ttf-jetbrains-mono-nerd"), "Font");
+        assert_eq!(package_category_badge("zen-browser-bin"), "AUR");
+        assert_eq!(package_category_badge("steam"), "Gaming");
+        assert_eq!(package_category_badge("git"), "Build");
+        assert_eq!(package_category_badge("cliphist"), "Utils");
+    }
 }

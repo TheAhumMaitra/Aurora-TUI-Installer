@@ -475,6 +475,100 @@ impl KernelTweakProfile {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FontChoice {
+    JetBrainsMono,
+    FiraCode,
+    CascadiaCode,
+    Hack,
+}
+
+#[allow(dead_code)]
+impl FontChoice {
+    pub const ALL: &[FontChoice] = &[
+        FontChoice::JetBrainsMono,
+        FontChoice::FiraCode,
+        FontChoice::CascadiaCode,
+        FontChoice::Hack,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            FontChoice::JetBrainsMono => "JetBrains Mono Nerd Font (Aurora Signature)",
+            FontChoice::FiraCode => "FiraCode Nerd Font (Programming Ligatures)",
+            FontChoice::CascadiaCode => "Cascadia Code Nerd Font (Microsoft Clean)",
+            FontChoice::Hack => "Hack Nerd Font (Classic Open Source)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            FontChoice::JetBrainsMono => "JetBrains Mono",
+            FontChoice::FiraCode => "FiraCode",
+            FontChoice::CascadiaCode => "Cascadia Code",
+            FontChoice::Hack => "Hack",
+        }
+    }
+
+    pub fn package_name(&self) -> &'static str {
+        match self {
+            FontChoice::JetBrainsMono => "ttf-jetbrains-mono-nerd",
+            FontChoice::FiraCode => "ttf-firacode-nerd",
+            FontChoice::CascadiaCode => "ttf-cascadia-code-nerd",
+            FontChoice::Hack => "ttf-hack-nerd",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            FontChoice::JetBrainsMono => FontChoice::FiraCode,
+            FontChoice::FiraCode => FontChoice::CascadiaCode,
+            FontChoice::CascadiaCode => FontChoice::Hack,
+            FontChoice::Hack => FontChoice::JetBrainsMono,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LockscreenChoice {
+    Hyprlock,
+    SwaylockEffects,
+    None,
+}
+
+#[allow(dead_code)]
+impl LockscreenChoice {
+    pub const ALL: &[LockscreenChoice] = &[
+        LockscreenChoice::Hyprlock,
+        LockscreenChoice::SwaylockEffects,
+        LockscreenChoice::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            LockscreenChoice::Hyprlock => "Hyprlock (Aurora Animated + Blurred Wallpaper)",
+            LockscreenChoice::SwaylockEffects => "Swaylock-effects (Fade & Blur Screen)",
+            LockscreenChoice::None => "None / Disable Auto-Lock Daemon",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            LockscreenChoice::Hyprlock => "Hyprlock",
+            LockscreenChoice::SwaylockEffects => "Swaylock-effects",
+            LockscreenChoice::None => "None",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            LockscreenChoice::Hyprlock => LockscreenChoice::SwaylockEffects,
+            LockscreenChoice::SwaylockEffects => LockscreenChoice::None,
+            LockscreenChoice::None => LockscreenChoice::Hyprlock,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Component {
     SystemPackages,
@@ -545,6 +639,8 @@ pub struct InstallConfig {
     pub display_manager: DisplayManagerChoice,
     pub bar_layout: BarLayoutChoice,
     pub launcher_style: LauncherStyle,
+    pub font_choice: FontChoice,
+    pub lockscreen: LockscreenChoice,
     pub audio_suite: AudioSuiteChoice,
     pub kernel_tweaks: KernelTweakProfile,
     pub shell_choice: ShellChoice,
@@ -586,6 +682,8 @@ impl Default for InstallConfig {
             display_manager: DisplayManagerChoice::SddmAstronaut,
             bar_layout: BarLayoutChoice::FloatingIsland,
             launcher_style: LauncherStyle::Spotlight,
+            font_choice: FontChoice::JetBrainsMono,
+            lockscreen: LockscreenChoice::Hyprlock,
             audio_suite: AudioSuiteChoice::EasyEffectsStudio,
             kernel_tweaks: KernelTweakProfile::Performance,
             shell_choice: ShellChoice::Fish,
@@ -651,6 +749,16 @@ impl InstallConfig {
         !self.disabled_packages.contains(package_name)
     }
 
+    pub fn enable_package(&mut self, package_name: &str) {
+        self.disabled_packages.remove(package_name);
+        self.preset = InstallPreset::Custom;
+    }
+
+    pub fn disable_package(&mut self, package_name: &str) {
+        self.disabled_packages.insert(package_name.to_string());
+        self.preset = InstallPreset::Custom;
+    }
+
     pub fn toggle_package(&mut self, package_name: &str) {
         if self.disabled_packages.contains(package_name) {
             self.disabled_packages.remove(package_name);
@@ -700,4 +808,51 @@ impl InstallConfig {
 
 pub fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_font_choice_cycling() {
+        let f = FontChoice::JetBrainsMono;
+        assert_eq!(f.cycle(), FontChoice::FiraCode);
+        assert_eq!(f.cycle().cycle(), FontChoice::CascadiaCode);
+        assert_eq!(f.cycle().cycle().cycle(), FontChoice::Hack);
+        assert_eq!(f.cycle().cycle().cycle().cycle(), FontChoice::JetBrainsMono);
+    }
+
+    #[test]
+    fn test_lockscreen_choice_cycling() {
+        let l = LockscreenChoice::Hyprlock;
+        assert_eq!(l.cycle(), LockscreenChoice::SwaylockEffects);
+        assert_eq!(l.cycle().cycle(), LockscreenChoice::None);
+        assert_eq!(l.cycle().cycle().cycle(), LockscreenChoice::Hyprlock);
+    }
+
+    #[test]
+    fn test_package_selection_certain_packages() {
+        let mut cfg = InstallConfig::default();
+        let all = ["hyprland", "waybar", "kitty", "rofi"];
+
+        // Start with clean slate: deselect all
+        cfg.disable_all_global(all);
+        assert!(!cfg.is_package_enabled("hyprland"));
+        assert!(!cfg.is_package_enabled("waybar"));
+
+        // Select only certain packages
+        cfg.enable_package("hyprland");
+        cfg.enable_package("kitty");
+
+        assert!(cfg.is_package_enabled("hyprland"));
+        assert!(cfg.is_package_enabled("kitty"));
+        assert!(!cfg.is_package_enabled("waybar"));
+        assert!(!cfg.is_package_enabled("rofi"));
+        assert_eq!(cfg.preset, InstallPreset::Custom);
+
+        // Toggle
+        cfg.toggle_package("waybar");
+        assert!(cfg.is_package_enabled("waybar"));
+    }
 }

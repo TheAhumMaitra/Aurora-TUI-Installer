@@ -9,8 +9,8 @@ mod ui;
 
 use clap::Parser;
 use cli::{
-    AudioArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, LauncherArg, ModeArg,
-    NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
+    AudioArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, FontArg, LauncherArg,
+    LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -20,8 +20,8 @@ use crossterm::{
 use distro::DistroInfo;
 use model::config::{
     AudioSuiteChoice, BarLayoutChoice, BrowserChoice, Component, DisplayManagerChoice,
-    InstallConfig, InstallMode, InstallPreset, KernelTweakProfile, LauncherStyle, NeovimPreset,
-    ShellChoice, TerminalChoice,
+    FontChoice, InstallConfig, InstallMode, InstallPreset, KernelTweakProfile, LauncherStyle,
+    LockscreenChoice, NeovimPreset, ShellChoice, TerminalChoice,
 };
 use model::state::{AppScreen, AppState, ConfigSection};
 use model::theme::AVAILABLE_THEMES;
@@ -126,6 +126,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             TweaksArg::Standard => KernelTweakProfile::Standard,
         };
     }
+    if let Some(font) = args.font {
+        config.font_choice = match font {
+            FontArg::JetBrainsMono => FontChoice::JetBrainsMono,
+            FontArg::FiraCode => FontChoice::FiraCode,
+            FontArg::CascadiaCode => FontChoice::CascadiaCode,
+            FontArg::Hack => FontChoice::Hack,
+        };
+    }
+    if let Some(lock) = args.lockscreen {
+        config.lockscreen = match lock {
+            LockscreenArg::Hyprlock => LockscreenChoice::Hyprlock,
+            LockscreenArg::SwaylockEffects => LockscreenChoice::SwaylockEffects,
+            LockscreenArg::None => LockscreenChoice::None,
+        };
+    }
+    if let Some(explicit_pkgs) = args.packages {
+        let all = distro::arch::all_arch_packages();
+        config.disable_all_global(all);
+        config.preset = InstallPreset::Custom;
+        for pkg in explicit_pkgs {
+            config.enable_package(&pkg);
+        }
+    }
+    if let Some(excluded) = args.exclude_packages {
+        for pkg in excluded {
+            config.disable_package(&pkg);
+        }
+    }
     if args.gaming && !config.selected_components.contains(&Component::GamingSuite) {
         config.selected_components.push(Component::GamingSuite);
     }
@@ -197,12 +225,17 @@ fn run_headless(state: &mut AppState) {
     println!("Terminal Choice:     {}", state.config.terminal_choice.label());
     println!("Web Browser:         {}", state.config.browser_choice.label());
     println!("Display Manager:     {}", state.config.display_manager.label());
+    println!("Lockscreen Daemon:   {}", state.config.lockscreen.label());
+    println!("Monospace Font:      {}", state.config.font_choice.label());
     println!("Waybar Layout:       {}", state.config.bar_layout.label());
     println!("Rofi Launcher:       {}", state.config.launcher_style.label());
     println!("Audio Suite:         {}", state.config.audio_suite.label());
     println!("Kernel Tweaks:       {}", state.config.kernel_tweaks.label());
     println!("Shell Choice:        {}", state.config.shell_choice.label());
     println!("Theme:               {}", state.config.theme_name);
+    let all_pkgs = distro::arch::all_arch_packages();
+    let enabled_count = all_pkgs.iter().filter(|&&p| state.config.is_package_enabled(p)).count();
+    println!("Active Packages:     {}/{} selected", enabled_count, all_pkgs.len());
     println!("Dry Run:             {}", state.config.dry_run);
     println!("===========================================");
 
@@ -344,6 +377,14 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.config.display_manager = state.config.display_manager.cycle();
                 state.refresh_steps();
             }
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                state.config.lockscreen = state.config.lockscreen.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('f') | KeyCode::Char('F') => {
+                state.config.font_choice = state.config.font_choice.cycle();
+                state.refresh_steps();
+            }
             KeyCode::Char('e') | KeyCode::Char('E') => {
                 state.config.audio_suite = state.config.audio_suite.cycle();
                 state.refresh_steps();
@@ -449,10 +490,50 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         },
 
         AppScreen::PackageSelection => {
+            if state.package_search_active {
+                match code {
+                    KeyCode::Esc => {
+                        state.package_search_active = false;
+                    }
+                    KeyCode::Enter => {
+                        state.package_search_active = false;
+                    }
+                    KeyCode::Backspace => {
+                        state.package_search_query.pop();
+                        state.package_item_cursor = 0;
+                    }
+                    KeyCode::Up => {
+                        state.package_item_cursor = state.package_item_cursor.saturating_sub(1);
+                    }
+                    KeyCode::Down => {
+                        let filtered = state.current_filtered_packages();
+                        if !filtered.is_empty() && state.package_item_cursor + 1 < filtered.len() {
+                            state.package_item_cursor += 1;
+                        }
+                    }
+                    KeyCode::Char(' ') => {
+                        let filtered = state.current_filtered_packages();
+                        if let Some(&pkg) = filtered.get(state.package_item_cursor) {
+                            state.config.toggle_package(pkg);
+                        }
+                    }
+                    KeyCode::Char(c) if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' => {
+                        state.package_search_query.push(c);
+                        state.package_item_cursor = 0;
+                    }
+                    _ => {}
+                }
+                return;
+            }
+
             let groups = distro::arch::ARCH_PACKAGE_GROUPS;
             let total_cats = groups.len();
 
             match code {
+                KeyCode::Char('/') => {
+                    state.package_search_active = true;
+                    state.package_side_packages = true;
+                }
                 KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
                     state.package_side_packages = !state.package_side_packages;
                 }
@@ -472,8 +553,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                             state.package_category_cursor += 1;
                             state.package_item_cursor = 0;
                         }
-                    } else if let Some(group) = groups.get(state.package_category_cursor) {
-                        if state.package_item_cursor + 1 < group.packages.len() {
+                    } else {
+                        let filtered = state.current_filtered_packages();
+                        if !filtered.is_empty() && state.package_item_cursor + 1 < filtered.len() {
                             state.package_item_cursor += 1;
                         }
                     }
@@ -481,8 +563,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 KeyCode::Char(' ') => {
                     if !state.package_side_packages {
                         state.package_side_packages = true;
-                    } else if let Some(group) = groups.get(state.package_category_cursor) {
-                        if let Some(&pkg) = group.packages.get(state.package_item_cursor) {
+                    } else {
+                        let filtered = state.current_filtered_packages();
+                        if let Some(&pkg) = filtered.get(state.package_item_cursor) {
                             state.config.toggle_package(pkg);
                         }
                     }
@@ -491,42 +574,39 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 KeyCode::Char('u') | KeyCode::Char('U') => {
                     state.config.enable_all_global();
                 }
-                // Global Deselect All packages
+                // Global Deselect All packages (enables selecting certain packages from zero)
                 KeyCode::Char('x') | KeyCode::Char('X') => {
                     let all = distro::arch::all_arch_packages();
                     state.config.disable_all_global(all);
                 }
-                // Category-level or Global Select All
+                // Category-level or Filtered Select All
                 KeyCode::Char('a') => {
-                    if let Some(group) = groups.get(state.package_category_cursor) {
-                        state
-                            .config
-                            .enable_all_packages(group.packages.iter().copied());
-                    }
+                    let filtered = state.current_filtered_packages();
+                    state
+                        .config
+                        .enable_all_packages(filtered.iter().copied());
                 }
                 KeyCode::Char('A') => {
                     // Shift+A: Select ALL packages globally
                     state.config.enable_all_global();
                 }
-                // Category-level or Global Deselect All
+                // Category-level or Filtered Deselect All
                 KeyCode::Char('n') => {
-                    if let Some(group) = groups.get(state.package_category_cursor) {
-                        state
-                            .config
-                            .disable_all_packages(group.packages.iter().copied());
-                    }
+                    let filtered = state.current_filtered_packages();
+                    state
+                        .config
+                        .disable_all_packages(filtered.iter().copied());
                 }
                 KeyCode::Char('N') => {
                     // Shift+N: Deselect ALL packages globally
                     let all = distro::arch::all_arch_packages();
                     state.config.disable_all_global(all);
                 }
-                // Category or Global Invert
+                // Category or Filtered Invert
                 KeyCode::Char('i') => {
-                    if let Some(group) = groups.get(state.package_category_cursor) {
-                        for &pkg in group.packages {
-                            state.config.toggle_package(pkg);
-                        }
+                    let filtered = state.current_filtered_packages();
+                    for &pkg in &filtered {
+                        state.config.toggle_package(pkg);
                     }
                 }
                 KeyCode::Char('I') => {
@@ -534,7 +614,16 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     let all = distro::arch::all_arch_packages();
                     state.config.invert_all_global(all);
                 }
-                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('B') => {
+                KeyCode::Esc => {
+                    if !state.package_search_query.is_empty() {
+                        state.package_search_query.clear();
+                        state.package_item_cursor = 0;
+                    } else {
+                        state.refresh_steps();
+                        state.current_screen = AppScreen::Configuration;
+                    }
+                }
+                KeyCode::Enter | KeyCode::Char('b') | KeyCode::Char('B') => {
                     state.refresh_steps();
                     state.current_screen = AppScreen::Configuration;
                 }
