@@ -28,26 +28,31 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(5), // 1. Preset & Package Shortcut
-            Constraint::Length(5), // 2. Neovim & Terminal Options
-            Constraint::Min(8),    // 3. Theme picker with live palette swatches
-            Constraint::Length(6), // 4. Flags (Dry-run, sudo-rs, Gaming suite, Shell)
+            Constraint::Length(5), // 1. Preset & Package Shortcuts
+            Constraint::Length(5), // 2. Developer Suite & Web Core
+            Constraint::Length(5), // 3. Rice Aesthetics (Bar, Launcher, DM, Motion)
+            Constraint::Min(6),    // 4. Theme picker with live palette swatches
+            Constraint::Length(5), // 5. Audio, Kernel & Flags
         ])
         .split(area);
 
-    // 1. Preset Box & Package Shortcut
+    // 1. Preset Box & Package Shortcuts
     let preset_active = state.active_config_section == ConfigSection::Preset;
     let preset_block = if preset_active {
-        active_block(" 1. Preset Profile [P to cycle, K for Packages] ")
+        active_block(" 1. Preset Profile [P to cycle, K for Packages, A for All, X for None] ")
     } else {
         default_block(" 1. Preset Profile ")
     };
 
+    let all_pkgs = crate::distro::arch::all_arch_packages();
+    let total_pkgs = all_pkgs.len();
     let disabled_count = state.config.disabled_packages.len();
+    let enabled_count = total_pkgs.saturating_sub(disabled_count);
+
     let pkg_tag = if disabled_count > 0 {
-        Span::styled(format!(" [{} excluded] ", disabled_count), Style::default().fg(COLOR_YELLOW))
+        Span::styled(format!(" [{}/{} Active] ", enabled_count, total_pkgs), Style::default().fg(COLOR_YELLOW))
     } else {
-        Span::styled(" [All active] ", Style::default().fg(COLOR_GREEN))
+        Span::styled(format!(" [{}/{} Active] ", total_pkgs, total_pkgs), Style::default().fg(COLOR_GREEN))
     };
 
     let preset_p = Paragraph::new(vec![
@@ -61,6 +66,13 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled("[K] Package Selector", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
             pkg_tag,
         ]),
+        Line::from(vec![
+            Span::styled("Custom Actions: ", Style::default().fg(COLOR_DARK)),
+            Span::styled("[A] ", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled("Select All Packages   ", Style::default().fg(COLOR_WHITE)),
+            Span::styled("[X] ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+            Span::styled("Deselect All Packages", Style::default().fg(COLOR_WHITE)),
+        ]),
         Line::from(Span::styled(
             state.config.preset.description(),
             Style::default().fg(COLOR_DARK),
@@ -69,48 +81,94 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     .block(preset_block.padding(Padding::horizontal(1)));
     f.render_widget(preset_p, chunks[0]);
 
-    // 2. Neovim Preset & Terminal Selection
-    let neovim_active = state.active_config_section == ConfigSection::Neovim;
-    let dev_block = if neovim_active {
-        active_block(" 2. Developer Suite [V for Neovim, T for Terminal] ")
+    // 2. Developer Suite & Web Core (Neovim, Terminal, Browser, Mode)
+    let dev_active = state.active_config_section == ConfigSection::Developer;
+    let dev_block = if dev_active {
+        active_block(" 2. Developer Suite & Web Core [V: Nvim, T: Term, W: Web, M: Channel] ")
     } else {
-        default_block(" 2. Developer Suite ")
+        default_block(" 2. Developer Suite & Web Core ")
     };
 
     let dev_p = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("Neovim Preset: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled("Neovim IDE:  ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
                 state.config.neovim_preset.label(),
                 Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" [V to cycle]", Style::default().fg(COLOR_DARK)),
+            Span::styled(" [V]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
-            Span::styled("Terminal:      ", Style::default().fg(COLOR_CYAN)),
+            Span::styled("Terminal:    ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
                 state.config.terminal_choice.label(),
                 Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" [T to cycle]", Style::default().fg(COLOR_DARK)),
-            Span::raw("  "),
+            Span::styled(" [T]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
             Span::styled("Channel: ", Style::default().fg(COLOR_CYAN)),
-            Span::styled(
-                state.config.mode.label(),
-                Style::default().fg(COLOR_YELLOW),
-            ),
+            Span::styled(state.config.mode.label(), Style::default().fg(COLOR_YELLOW)),
             Span::styled(" [M]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Web Browser: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.browser_choice.label(),
+                Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [W]", Style::default().fg(COLOR_DARK)),
         ]),
     ])
     .block(dev_block.padding(Padding::horizontal(1)));
     f.render_widget(dev_p, chunks[1]);
 
-    // 3. Theme Selector with Live Color Swatches
+    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Motion)
+    let aes_active = state.active_config_section == ConfigSection::Aesthetics;
+    let aes_block = if aes_active {
+        active_block(" 3. Desktop Rice Aesthetics [B: Waybar, R: Rofi, L: Login, O: Motion] ")
+    } else {
+        default_block(" 3. Desktop Rice Aesthetics ")
+    };
+
+    let aes_p = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("Waybar:      ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.bar_layout.label(),
+                Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [B]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Launcher:    ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.launcher_style.label(),
+                Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [R]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Display Mgr: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.display_manager.label(),
+                Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [L]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Motion: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.animation_profile.label(), Style::default().fg(COLOR_GREEN)),
+            Span::styled(" [O]", Style::default().fg(COLOR_DARK)),
+        ]),
+    ])
+    .block(aes_block.padding(Padding::horizontal(1)));
+    f.render_widget(aes_p, chunks[2]);
+
+    // 4. Theme Selector with Live Color Swatches
     let theme_active = state.active_config_section == ConfigSection::Theme;
     let theme_block = if theme_active {
-        active_block(" 3. Desktop Theme & Palette [↑/↓ to choose, Space to select] ")
+        active_block(" 4. Desktop Theme & Palette [↑/↓ to choose, Space to select] ")
     } else {
-        default_block(" 3. Desktop Theme & Palette ")
+        default_block(" 4. Desktop Theme & Palette ")
     };
 
     let mut theme_lines = Vec::new();
@@ -149,14 +207,14 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
 
     let theme_p = Paragraph::new(theme_lines)
         .block(theme_block.padding(Padding::horizontal(1)));
-    f.render_widget(theme_p, chunks[2]);
+    f.render_widget(theme_p, chunks[3]);
 
-    // 4. Flags & Options (Dry Run, Sudo-rs, Gaming, Shell)
-    let dry_run_active = state.active_config_section == ConfigSection::DryRun;
-    let dry_block = if dry_run_active {
-        active_block(" 4. Options & Flags [Space to toggle] ")
+    // 5. Audio, Performance & System Flags
+    let flags_active = state.active_config_section == ConfigSection::SystemFlags;
+    let flags_block = if flags_active {
+        active_block(" 5. Audio & Performance Flags [E: Sound, Z: Kernel, H: Shell, G, D, S] ")
     } else {
-        default_block(" 4. Options & Flags ")
+        default_block(" 5. Audio & Performance Flags ")
     };
 
     let dry_box = if state.config.dry_run {
@@ -177,23 +235,27 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         Span::styled("[ ] Gaming Suite [G] (Steam, GameMode, MangoHud)", Style::default().fg(COLOR_DARK))
     };
 
-    let shell_line = Line::from(vec![
-        Span::styled("Default Shell: ", Style::default().fg(COLOR_CYAN)),
-        Span::styled(state.config.shell_choice.label(), Style::default().fg(COLOR_WHITE)),
-        Span::styled(" [H to cycle]", Style::default().fg(COLOR_DARK)),
-        Span::raw("   "),
-        Span::styled("Animations: ", Style::default().fg(COLOR_CYAN)),
-        Span::styled(state.config.animation_profile.label(), Style::default().fg(COLOR_GREEN)),
-        Span::styled(" [O]", Style::default().fg(COLOR_DARK)),
-    ]);
-
-    let dry_p = Paragraph::new(vec![
+    let flags_p = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("Sound Suite:   ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.audio_suite.label(), Style::default().fg(COLOR_WHITE)),
+            Span::styled(" [E]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Kernel: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.kernel_tweaks.short_name(), Style::default().fg(COLOR_GREEN)),
+            Span::styled(" [Z]", Style::default().fg(COLOR_DARK)),
+        ]),
+        Line::from(vec![
+            Span::styled("Default Shell: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.shell_choice.label(), Style::default().fg(COLOR_WHITE)),
+            Span::styled(" [H]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            gaming_box,
+        ]),
         Line::from(vec![dry_box, sudo_box]),
-        Line::from(gaming_box),
-        shell_line,
     ])
-    .block(dry_block.padding(Padding::horizontal(1)));
-    f.render_widget(dry_p, chunks[3]);
+    .block(flags_block.padding(Padding::horizontal(1)));
+    f.render_widget(flags_p, chunks[4]);
 }
 
 fn render_right_pane(f: &mut Frame, state: &AppState, area: Rect) {

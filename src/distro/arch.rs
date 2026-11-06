@@ -3,7 +3,10 @@
 
 use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
-use crate::model::config::{Component, InstallConfig, InstallMode, NeovimPreset};
+use crate::model::config::{
+    AudioSuiteChoice, BrowserChoice, Component, DisplayManagerChoice, InstallConfig,
+    InstallMode, KernelTweakProfile, NeovimPreset,
+};
 
 pub const PACMAN_CORE: &[&str] = &[
     "hyprland",
@@ -142,6 +145,14 @@ pub const ARCH_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
     },
 ];
 
+pub fn all_arch_packages() -> Vec<&'static str> {
+    let mut all = Vec::new();
+    for group in ARCH_PACKAGE_GROUPS {
+        all.extend_from_slice(group.packages);
+    }
+    all
+}
+
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
 
@@ -176,11 +187,20 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         steps.push(InstallStep::new(
             "arch_aur",
             "Setup AUR Helper & Extra Packages",
-            "Ensure yay is available and install Zen Browser, Nordzy cursors, Quickshell, etc.",
+            "Ensure yay/paru is available and install Nordzy cursors, Quickshell, Snappy Switcher, etc.",
         ));
     }
 
-    // 4. Gaming Suite (if selected)
+    // 4. Default Web Browser
+    if config.browser_choice != BrowserChoice::None {
+        steps.push(InstallStep::new(
+            "arch_browser",
+            format!("Deploy {} Browser", config.browser_choice.short_name()),
+            format!("Install and configure {} as the default desktop browser", config.browser_choice.label()),
+        ));
+    }
+
+    // 5. Gaming Suite (if selected)
     if config.is_component_selected(Component::GamingSuite) {
         steps.push(InstallStep::new(
             "arch_gaming",
@@ -189,16 +209,25 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 5. SDDM Theme
-    if config.is_component_selected(Component::SddmTheme) {
+    // 6. Display Manager / Login Screen
+    if config.display_manager != DisplayManagerChoice::NoneTty {
         steps.push(InstallStep::new(
             "arch_sddm",
-            "Configure SDDM Astronaut Theme",
-            "Clone and configure SDDM astronaut theme, install fonts, and enable sddm.service",
+            format!("Configure Display Manager ({})", config.display_manager.short_name()),
+            format!("Setup {} login manager and enable systemd display-manager service", config.display_manager.label()),
         ));
     }
 
-    // 6. Rust scripts & tools
+    // 7. Audio & Sound Processing Suite
+    if config.audio_suite == AudioSuiteChoice::EasyEffectsStudio {
+        steps.push(InstallStep::new(
+            "arch_audio",
+            "Configure EasyEffects Studio DSP Audio",
+            "Deploy PipeWire DSP equalizer, bass booster, and voice isolation profiles",
+        ));
+    }
+
+    // 8. Rust scripts & tools
     if config.is_component_selected(Component::RustScripts) {
         steps.push(InstallStep::new(
             "arch_rust_scripts",
@@ -207,7 +236,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 7. Waytrogen-Aurora
+    // 9. Waytrogen-Aurora
     if config.is_component_selected(Component::Waytrogen) {
         steps.push(InstallStep::new(
             "arch_waytrogen",
@@ -216,7 +245,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 8. Neovim Setup
+    // 10. Neovim Setup
     if config.is_component_selected(Component::LazyVim) && config.neovim_preset != NeovimPreset::None {
         steps.push(InstallStep::new(
             "arch_lazyvim",
@@ -225,16 +254,16 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 9. Dotfiles
+    // 11. Dotfiles with Custom Bar Layout & Launcher Styling
     if config.is_component_selected(Component::Dotfiles) {
         steps.push(InstallStep::new(
             "arch_dotfiles",
-            "Deploy Aurora Hyprland Dotfiles",
-            format!("Deploy Hyprland (Animation: {}), Waybar, SwayNC, and terminal configs", config.animation_profile.label()),
+            format!("Deploy Aurora Dotfiles (Bar: {}, Rofi: {})", config.bar_layout.short_name(), config.launcher_style.short_name()),
+            format!("Deploy Hyprland (Animation: {}), Waybar ({}), SwayNC, and terminal configs", config.animation_profile.label(), config.bar_layout.label()),
         ));
     }
 
-    // 10. Shell & PATH
+    // 12. Shell & PATH
     if config.is_component_selected(Component::ShellConfig) {
         steps.push(InstallStep::new(
             "arch_shell",
@@ -243,7 +272,16 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 11. Sudo-rs
+    // 13. Kernel & Scheduler Tweaks
+    if config.kernel_tweaks == KernelTweakProfile::Performance {
+        steps.push(InstallStep::new(
+            "arch_tweaks",
+            "Apply Kernel & Process Optimizations (Ananicy + ZRAM)",
+            "Install and enable ananicy-cpp auto-nice scheduler and zram-generator",
+        ));
+    }
+
+    // 14. Sudo-rs
     if config.is_component_selected(Component::SudoRs) && config.allow_sudo_rs {
         steps.push(InstallStep::new(
             "arch_sudo_rs",
@@ -252,7 +290,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 12. Final theme & polish
+    // 15. Final theme & polish
     steps.push(InstallStep::new(
         "arch_theme",
         "Apply Default Aurora Theme",

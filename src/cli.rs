@@ -56,6 +56,70 @@ pub enum ShellArg {
     Bash,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum BrowserArg {
+    #[value(name = "zen")]
+    Zen,
+    #[value(name = "brave")]
+    Brave,
+    #[value(name = "firefox")]
+    Firefox,
+    #[value(name = "chromium")]
+    Chromium,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum DisplayManagerArg {
+    #[value(name = "sddm")]
+    Sddm,
+    #[value(name = "ly")]
+    Ly,
+    #[value(name = "greetd")]
+    Greetd,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum BarLayoutArg {
+    #[value(name = "island")]
+    Island,
+    #[value(name = "full")]
+    Full,
+    #[value(name = "dual")]
+    Dual,
+    #[value(name = "minimal")]
+    Minimal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum LauncherArg {
+    #[value(name = "spotlight")]
+    Spotlight,
+    #[value(name = "drawer")]
+    Drawer,
+    #[value(name = "corner")]
+    Corner,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum AudioArg {
+    #[value(name = "easyeffects")]
+    EasyEffects,
+    #[value(name = "pipewire")]
+    Pipewire,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum TweaksArg {
+    #[value(name = "performance")]
+    Performance,
+    #[value(name = "standard")]
+    Standard,
+}
+
 /// Aurora TUI Installer tailored for Arch Linux and Arch-based distributions
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -97,6 +161,30 @@ pub struct CliArgs {
     /// Choose preferred default login shell (fish, zsh, bash)
     #[arg(long, value_enum)]
     pub shell: Option<ShellArg>,
+
+    /// Choose default web browser (zen, brave, firefox, chromium, none)
+    #[arg(long, value_enum)]
+    pub browser: Option<BrowserArg>,
+
+    /// Choose display manager / login screen (sddm, ly, greetd, none)
+    #[arg(long, value_enum)]
+    pub dm: Option<DisplayManagerArg>,
+
+    /// Choose Waybar status bar layout (island, full, dual, minimal)
+    #[arg(long, value_enum)]
+    pub bar: Option<BarLayoutArg>,
+
+    /// Choose Rofi application launcher style (spotlight, drawer, corner)
+    #[arg(long, value_enum)]
+    pub launcher: Option<LauncherArg>,
+
+    /// Choose audio suite configuration (easyeffects, pipewire)
+    #[arg(long, value_enum)]
+    pub audio: Option<AudioArg>,
+
+    /// Choose kernel and process scheduler optimization (performance, standard)
+    #[arg(long, value_enum)]
+    pub tweaks: Option<TweaksArg>,
 
     /// Enable gaming and performance suite (Steam, GameMode, MangoHud)
     #[arg(long, default_value_t = false)]

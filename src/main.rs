@@ -8,7 +8,10 @@ mod model;
 mod ui;
 
 use clap::Parser;
-use cli::{CliArgs, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg};
+use cli::{
+    AudioArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, LauncherArg, ModeArg,
+    NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
+};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
@@ -16,8 +19,9 @@ use crossterm::{
 };
 use distro::DistroInfo;
 use model::config::{
-    Component, InstallConfig, InstallMode, InstallPreset, NeovimPreset, ShellChoice,
-    TerminalChoice,
+    AudioSuiteChoice, BarLayoutChoice, BrowserChoice, Component, DisplayManagerChoice,
+    InstallConfig, InstallMode, InstallPreset, KernelTweakProfile, LauncherStyle, NeovimPreset,
+    ShellChoice, TerminalChoice,
 };
 use model::state::{AppScreen, AppState, ConfigSection};
 use model::theme::AVAILABLE_THEMES;
@@ -76,6 +80,50 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ShellArg::Fish => ShellChoice::Fish,
             ShellArg::Zsh => ShellChoice::Zsh,
             ShellArg::Bash => ShellChoice::Bash,
+        };
+    }
+    if let Some(b) = args.browser {
+        config.browser_choice = match b {
+            BrowserArg::Zen => BrowserChoice::Zen,
+            BrowserArg::Brave => BrowserChoice::Brave,
+            BrowserArg::Firefox => BrowserChoice::Firefox,
+            BrowserArg::Chromium => BrowserChoice::Chromium,
+            BrowserArg::None => BrowserChoice::None,
+        };
+    }
+    if let Some(dm) = args.dm {
+        config.display_manager = match dm {
+            DisplayManagerArg::Sddm => DisplayManagerChoice::SddmAstronaut,
+            DisplayManagerArg::Ly => DisplayManagerChoice::LyMatrix,
+            DisplayManagerArg::Greetd => DisplayManagerChoice::GreetdTuigreet,
+            DisplayManagerArg::None => DisplayManagerChoice::NoneTty,
+        };
+    }
+    if let Some(bar) = args.bar {
+        config.bar_layout = match bar {
+            BarLayoutArg::Island => BarLayoutChoice::FloatingIsland,
+            BarLayoutArg::Full => BarLayoutChoice::FullWidthEdge,
+            BarLayoutArg::Dual => BarLayoutChoice::DualBar,
+            BarLayoutArg::Minimal => BarLayoutChoice::MinimalClean,
+        };
+    }
+    if let Some(l) = args.launcher {
+        config.launcher_style = match l {
+            LauncherArg::Spotlight => LauncherStyle::Spotlight,
+            LauncherArg::Drawer => LauncherStyle::FullscreenDrawer,
+            LauncherArg::Corner => LauncherStyle::CornerPopup,
+        };
+    }
+    if let Some(a) = args.audio {
+        config.audio_suite = match a {
+            AudioArg::EasyEffects => AudioSuiteChoice::EasyEffectsStudio,
+            AudioArg::Pipewire => AudioSuiteChoice::PurePipewire,
+        };
+    }
+    if let Some(t) = args.tweaks {
+        config.kernel_tweaks = match t {
+            TweaksArg::Performance => KernelTweakProfile::Performance,
+            TweaksArg::Standard => KernelTweakProfile::Standard,
         };
     }
     if args.gaming && !config.selected_components.contains(&Component::GamingSuite) {
@@ -147,6 +195,12 @@ fn run_headless(state: &mut AppState) {
     println!("Installation Mode:   {:?}", state.config.mode);
     println!("Neovim Preset:       {}", state.config.neovim_preset.label());
     println!("Terminal Choice:     {}", state.config.terminal_choice.label());
+    println!("Web Browser:         {}", state.config.browser_choice.label());
+    println!("Display Manager:     {}", state.config.display_manager.label());
+    println!("Waybar Layout:       {}", state.config.bar_layout.label());
+    println!("Rofi Launcher:       {}", state.config.launcher_style.label());
+    println!("Audio Suite:         {}", state.config.audio_suite.label());
+    println!("Kernel Tweaks:       {}", state.config.kernel_tweaks.label());
     println!("Shell Choice:        {}", state.config.shell_choice.label());
     println!("Theme:               {}", state.config.theme_name);
     println!("Dry Run:             {}", state.config.dry_run);
@@ -223,24 +277,22 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         AppScreen::Configuration => match code {
             KeyCode::Tab => {
                 state.active_config_section = match state.active_config_section {
-                    ConfigSection::Preset => ConfigSection::Mode,
-                    ConfigSection::Mode => ConfigSection::Neovim,
-                    ConfigSection::Neovim => ConfigSection::Terminal,
-                    ConfigSection::Terminal => ConfigSection::Theme,
-                    ConfigSection::Theme => ConfigSection::DryRun,
-                    ConfigSection::DryRun => ConfigSection::Components,
+                    ConfigSection::Preset => ConfigSection::Developer,
+                    ConfigSection::Developer => ConfigSection::Aesthetics,
+                    ConfigSection::Aesthetics => ConfigSection::Theme,
+                    ConfigSection::Theme => ConfigSection::SystemFlags,
+                    ConfigSection::SystemFlags => ConfigSection::Components,
                     ConfigSection::Components => ConfigSection::Preset,
                 };
             }
             KeyCode::BackTab => {
                 state.active_config_section = match state.active_config_section {
                     ConfigSection::Preset => ConfigSection::Components,
-                    ConfigSection::Mode => ConfigSection::Preset,
-                    ConfigSection::Neovim => ConfigSection::Mode,
-                    ConfigSection::Terminal => ConfigSection::Neovim,
-                    ConfigSection::Theme => ConfigSection::Terminal,
-                    ConfigSection::DryRun => ConfigSection::Theme,
-                    ConfigSection::Components => ConfigSection::DryRun,
+                    ConfigSection::Developer => ConfigSection::Preset,
+                    ConfigSection::Aesthetics => ConfigSection::Developer,
+                    ConfigSection::Theme => ConfigSection::Aesthetics,
+                    ConfigSection::SystemFlags => ConfigSection::Theme,
+                    ConfigSection::Components => ConfigSection::SystemFlags,
                 };
             }
             // Extraordinary shortcuts!
@@ -250,24 +302,13 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.package_side_packages = false;
                 state.current_screen = AppScreen::PackageSelection;
             }
-            KeyCode::Char('v') | KeyCode::Char('V') => {
-                state.config.neovim_preset = state.config.neovim_preset.cycle();
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                state.config.enable_all_global();
                 state.refresh_steps();
             }
-            KeyCode::Char('t') | KeyCode::Char('T') => {
-                state.config.terminal_choice = state.config.terminal_choice.cycle();
-                state.refresh_steps();
-            }
-            KeyCode::Char('h') | KeyCode::Char('H') => {
-                state.config.shell_choice = state.config.shell_choice.cycle();
-                state.refresh_steps();
-            }
-            KeyCode::Char('g') | KeyCode::Char('G') => {
-                state.config.toggle_component(Component::GamingSuite);
-                state.refresh_steps();
-            }
-            KeyCode::Char('o') | KeyCode::Char('O') => {
-                state.config.animation_profile = state.config.animation_profile.cycle();
+            KeyCode::Char('x') | KeyCode::Char('X') => {
+                let all = distro::arch::all_arch_packages();
+                state.config.disable_all_global(all);
                 state.refresh_steps();
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
@@ -279,11 +320,55 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.config.apply_preset(next);
                 state.refresh_steps();
             }
+            KeyCode::Char('v') | KeyCode::Char('V') => {
+                state.config.neovim_preset = state.config.neovim_preset.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                state.config.terminal_choice = state.config.terminal_choice.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('w') | KeyCode::Char('W') => {
+                state.config.browser_choice = state.config.browser_choice.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('b') | KeyCode::Char('B') => {
+                state.config.bar_layout = state.config.bar_layout.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('r') | KeyCode::Char('R') => {
+                state.config.launcher_style = state.config.launcher_style.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('l') | KeyCode::Char('L') => {
+                state.config.display_manager = state.config.display_manager.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('e') | KeyCode::Char('E') => {
+                state.config.audio_suite = state.config.audio_suite.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('z') | KeyCode::Char('Z') => {
+                state.config.kernel_tweaks = state.config.kernel_tweaks.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('h') | KeyCode::Char('H') => {
+                state.config.shell_choice = state.config.shell_choice.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                state.config.animation_profile = state.config.animation_profile.cycle();
+                state.refresh_steps();
+            }
             KeyCode::Char('m') | KeyCode::Char('M') => {
                 state.config.mode = match state.config.mode {
                     InstallMode::Stable => InstallMode::Git,
                     InstallMode::Git => InstallMode::Stable,
                 };
+                state.refresh_steps();
+            }
+            KeyCode::Char('g') | KeyCode::Char('G') => {
+                state.config.toggle_component(Component::GamingSuite);
                 state.refresh_steps();
             }
             KeyCode::Char('d') | KeyCode::Char('D') => {
@@ -327,7 +412,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     state.config.toggle_component(comp);
                     state.refresh_steps();
                 }
-                ConfigSection::DryRun => {
+                ConfigSection::SystemFlags => {
                     state.config.dry_run = !state.config.dry_run;
                 }
                 ConfigSection::Preset => {
@@ -339,19 +424,12 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     state.config.apply_preset(next);
                     state.refresh_steps();
                 }
-                ConfigSection::Mode => {
-                    state.config.mode = match state.config.mode {
-                        InstallMode::Stable => InstallMode::Git,
-                        InstallMode::Git => InstallMode::Stable,
-                    };
-                    state.refresh_steps();
-                }
-                ConfigSection::Neovim => {
+                ConfigSection::Developer => {
                     state.config.neovim_preset = state.config.neovim_preset.cycle();
                     state.refresh_steps();
                 }
-                ConfigSection::Terminal => {
-                    state.config.terminal_choice = state.config.terminal_choice.cycle();
+                ConfigSection::Aesthetics => {
+                    state.config.bar_layout = state.config.bar_layout.cycle();
                     state.refresh_steps();
                 }
                 ConfigSection::Theme => {
@@ -364,7 +442,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.refresh_steps();
                 state.current_screen = AppScreen::Summary;
             }
-            KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('B') => {
+            KeyCode::Esc => {
                 state.current_screen = AppScreen::Welcome;
             }
             _ => {}
@@ -409,26 +487,52 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                         }
                     }
                 }
-                KeyCode::Char('a') | KeyCode::Char('A') => {
+                // Global Select All packages
+                KeyCode::Char('u') | KeyCode::Char('U') => {
+                    state.config.enable_all_global();
+                }
+                // Global Deselect All packages
+                KeyCode::Char('x') | KeyCode::Char('X') => {
+                    let all = distro::arch::all_arch_packages();
+                    state.config.disable_all_global(all);
+                }
+                // Category-level or Global Select All
+                KeyCode::Char('a') => {
                     if let Some(group) = groups.get(state.package_category_cursor) {
                         state
                             .config
                             .enable_all_packages(group.packages.iter().copied());
                     }
                 }
-                KeyCode::Char('n') | KeyCode::Char('N') => {
+                KeyCode::Char('A') => {
+                    // Shift+A: Select ALL packages globally
+                    state.config.enable_all_global();
+                }
+                // Category-level or Global Deselect All
+                KeyCode::Char('n') => {
                     if let Some(group) = groups.get(state.package_category_cursor) {
                         state
                             .config
                             .disable_all_packages(group.packages.iter().copied());
                     }
                 }
-                KeyCode::Char('i') | KeyCode::Char('I') => {
+                KeyCode::Char('N') => {
+                    // Shift+N: Deselect ALL packages globally
+                    let all = distro::arch::all_arch_packages();
+                    state.config.disable_all_global(all);
+                }
+                // Category or Global Invert
+                KeyCode::Char('i') => {
                     if let Some(group) = groups.get(state.package_category_cursor) {
                         for &pkg in group.packages {
                             state.config.toggle_package(pkg);
                         }
                     }
+                }
+                KeyCode::Char('I') => {
+                    // Shift+I: Invert ALL packages globally
+                    let all = distro::arch::all_arch_packages();
+                    state.config.invert_all_global(all);
                 }
                 KeyCode::Enter | KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('B') => {
                     state.refresh_steps();

@@ -211,6 +211,270 @@ impl AnimationProfile {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BrowserChoice {
+    Zen,
+    Brave,
+    Firefox,
+    Chromium,
+    None,
+}
+
+#[allow(dead_code)]
+impl BrowserChoice {
+    pub const ALL: &[BrowserChoice] = &[
+        BrowserChoice::Zen,
+        BrowserChoice::Brave,
+        BrowserChoice::Firefox,
+        BrowserChoice::Chromium,
+        BrowserChoice::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            BrowserChoice::Zen => "Zen Browser (Aurora Signature - Split Tabs & Privacy)",
+            BrowserChoice::Brave => "Brave (Native Adblock & Privacy Shield)",
+            BrowserChoice::Firefox => "Firefox (Official Wayland Open-Source)",
+            BrowserChoice::Chromium => "Chromium (Pure Engine & High Compatibility)",
+            BrowserChoice::None => "None / Keep Current Browser Untouched",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            BrowserChoice::Zen => "Zen Browser",
+            BrowserChoice::Brave => "Brave",
+            BrowserChoice::Firefox => "Firefox",
+            BrowserChoice::Chromium => "Chromium",
+            BrowserChoice::None => "None",
+        }
+    }
+
+    pub fn package_name(&self) -> Option<&'static str> {
+        match self {
+            BrowserChoice::Zen => Some("zen-browser-bin"),
+            BrowserChoice::Brave => Some("brave-bin"),
+            BrowserChoice::Firefox => Some("firefox"),
+            BrowserChoice::Chromium => Some("chromium"),
+            BrowserChoice::None => None,
+        }
+    }
+
+    pub fn is_aur(&self) -> bool {
+        matches!(self, BrowserChoice::Zen | BrowserChoice::Brave)
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            BrowserChoice::Zen => BrowserChoice::Brave,
+            BrowserChoice::Brave => BrowserChoice::Firefox,
+            BrowserChoice::Firefox => BrowserChoice::Chromium,
+            BrowserChoice::Chromium => BrowserChoice::None,
+            BrowserChoice::None => BrowserChoice::Zen,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisplayManagerChoice {
+    SddmAstronaut,
+    LyMatrix,
+    GreetdTuigreet,
+    NoneTty,
+}
+
+#[allow(dead_code)]
+impl DisplayManagerChoice {
+    pub const ALL: &[DisplayManagerChoice] = &[
+        DisplayManagerChoice::SddmAstronaut,
+        DisplayManagerChoice::LyMatrix,
+        DisplayManagerChoice::GreetdTuigreet,
+        DisplayManagerChoice::NoneTty,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            DisplayManagerChoice::SddmAstronaut => "SDDM (Astronaut Animated Theme)",
+            DisplayManagerChoice::LyMatrix => "Ly (Ultra-Minimalist TUI Matrix)",
+            DisplayManagerChoice::GreetdTuigreet => "Greetd (Tuigreet Wayland Greeter)",
+            DisplayManagerChoice::NoneTty => "Manual TTY Login (Direct start-hyprland)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            DisplayManagerChoice::SddmAstronaut => "SDDM Astronaut",
+            DisplayManagerChoice::LyMatrix => "Ly TUI",
+            DisplayManagerChoice::GreetdTuigreet => "Tuigreet",
+            DisplayManagerChoice::NoneTty => "TTY / Manual",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            DisplayManagerChoice::SddmAstronaut => DisplayManagerChoice::LyMatrix,
+            DisplayManagerChoice::LyMatrix => DisplayManagerChoice::GreetdTuigreet,
+            DisplayManagerChoice::GreetdTuigreet => DisplayManagerChoice::NoneTty,
+            DisplayManagerChoice::NoneTty => DisplayManagerChoice::SddmAstronaut,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BarLayoutChoice {
+    FloatingIsland,
+    FullWidthEdge,
+    DualBar,
+    MinimalClean,
+}
+
+#[allow(dead_code)]
+impl BarLayoutChoice {
+    pub const ALL: &[BarLayoutChoice] = &[
+        BarLayoutChoice::FloatingIsland,
+        BarLayoutChoice::FullWidthEdge,
+        BarLayoutChoice::DualBar,
+        BarLayoutChoice::MinimalClean,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            BarLayoutChoice::FloatingIsland => "Floating Islands (Rounded Pills & Gaps - Signature)",
+            BarLayoutChoice::FullWidthEdge => "Full Width Edge (Solid Powerline Top Bar)",
+            BarLayoutChoice::DualBar => "Dual Waybar (Top Status + Bottom Workspace Dock)",
+            BarLayoutChoice::MinimalClean => "Minimal Clean (Uncluttered Time & Battery)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            BarLayoutChoice::FloatingIsland => "Floating Islands",
+            BarLayoutChoice::FullWidthEdge => "Full Width Edge",
+            BarLayoutChoice::DualBar => "Dual Waybar",
+            BarLayoutChoice::MinimalClean => "Minimal Clean",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            BarLayoutChoice::FloatingIsland => BarLayoutChoice::FullWidthEdge,
+            BarLayoutChoice::FullWidthEdge => BarLayoutChoice::DualBar,
+            BarLayoutChoice::DualBar => BarLayoutChoice::MinimalClean,
+            BarLayoutChoice::MinimalClean => BarLayoutChoice::FloatingIsland,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LauncherStyle {
+    Spotlight,
+    FullscreenDrawer,
+    CornerPopup,
+}
+
+#[allow(dead_code)]
+impl LauncherStyle {
+    pub const ALL: &[LauncherStyle] = &[
+        LauncherStyle::Spotlight,
+        LauncherStyle::FullscreenDrawer,
+        LauncherStyle::CornerPopup,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            LauncherStyle::Spotlight => "Spotlight (Center Floating Palette - Raycast Style)",
+            LauncherStyle::FullscreenDrawer => "Fullscreen Drawer (GNOME/App Grid Style)",
+            LauncherStyle::CornerPopup => "Corner Popup (Left-Aligned Desktop Launcher)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            LauncherStyle::Spotlight => "Center Spotlight",
+            LauncherStyle::FullscreenDrawer => "Fullscreen Grid",
+            LauncherStyle::CornerPopup => "Corner Popup",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            LauncherStyle::Spotlight => LauncherStyle::FullscreenDrawer,
+            LauncherStyle::FullscreenDrawer => LauncherStyle::CornerPopup,
+            LauncherStyle::CornerPopup => LauncherStyle::Spotlight,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AudioSuiteChoice {
+    EasyEffectsStudio,
+    PurePipewire,
+}
+
+#[allow(dead_code)]
+impl AudioSuiteChoice {
+    pub const ALL: &[AudioSuiteChoice] = &[
+        AudioSuiteChoice::EasyEffectsStudio,
+        AudioSuiteChoice::PurePipewire,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            AudioSuiteChoice::EasyEffectsStudio => "EasyEffects Studio (DSP Equalizer & Bass Presets)",
+            AudioSuiteChoice::PurePipewire => "Pure PipeWire + WirePlumber (Lightweight Audio)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            AudioSuiteChoice::EasyEffectsStudio => "EasyEffects Studio",
+            AudioSuiteChoice::PurePipewire => "Pure PipeWire",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            AudioSuiteChoice::EasyEffectsStudio => AudioSuiteChoice::PurePipewire,
+            AudioSuiteChoice::PurePipewire => AudioSuiteChoice::EasyEffectsStudio,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KernelTweakProfile {
+    Performance,
+    Standard,
+}
+
+#[allow(dead_code)]
+impl KernelTweakProfile {
+    pub const ALL: &[KernelTweakProfile] = &[
+        KernelTweakProfile::Performance,
+        KernelTweakProfile::Standard,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            KernelTweakProfile::Performance => "Ananicy-cpp + ZRAM (Max Gaming & UI Smoothness)",
+            KernelTweakProfile::Standard => "Standard Arch Linux Kernel Scheduling",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            KernelTweakProfile::Performance => "Ananicy + ZRAM",
+            KernelTweakProfile::Standard => "Standard Kernel",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            KernelTweakProfile::Performance => KernelTweakProfile::Standard,
+            KernelTweakProfile::Standard => KernelTweakProfile::Performance,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Component {
     SystemPackages,
@@ -277,6 +541,12 @@ pub struct InstallConfig {
     pub selected_components: Vec<Component>,
     pub neovim_preset: NeovimPreset,
     pub terminal_choice: TerminalChoice,
+    pub browser_choice: BrowserChoice,
+    pub display_manager: DisplayManagerChoice,
+    pub bar_layout: BarLayoutChoice,
+    pub launcher_style: LauncherStyle,
+    pub audio_suite: AudioSuiteChoice,
+    pub kernel_tweaks: KernelTweakProfile,
     pub shell_choice: ShellChoice,
     pub animation_profile: AnimationProfile,
     pub theme_name: String,
@@ -312,6 +582,12 @@ impl Default for InstallConfig {
             selected_components,
             neovim_preset: NeovimPreset::LazyVim,
             terminal_choice: TerminalChoice::Kitty,
+            browser_choice: BrowserChoice::Zen,
+            display_manager: DisplayManagerChoice::SddmAstronaut,
+            bar_layout: BarLayoutChoice::FloatingIsland,
+            launcher_style: LauncherStyle::Spotlight,
+            audio_suite: AudioSuiteChoice::EasyEffectsStudio,
+            kernel_tweaks: KernelTweakProfile::Performance,
             shell_choice: ShellChoice::Fish,
             animation_profile: AnimationProfile::Snappy,
             theme_name: "Aurora Default".to_string(),
@@ -363,6 +639,8 @@ impl InstallConfig {
                     Component::ShellConfig,
                 ];
                 self.neovim_preset = NeovimPreset::None;
+                self.browser_choice = BrowserChoice::None;
+                self.display_manager = DisplayManagerChoice::NoneTty;
                 self.disabled_packages.clear();
             }
             InstallPreset::Custom => {}
@@ -386,11 +664,35 @@ impl InstallConfig {
         for pkg in pkgs {
             self.disabled_packages.remove(pkg);
         }
+        self.preset = InstallPreset::Custom;
     }
 
     pub fn disable_all_packages<'a>(&mut self, pkgs: impl IntoIterator<Item = &'a str>) {
         for pkg in pkgs {
             self.disabled_packages.insert(pkg.to_string());
+        }
+        self.preset = InstallPreset::Custom;
+    }
+
+    pub fn enable_all_global(&mut self) {
+        self.disabled_packages.clear();
+        self.preset = InstallPreset::Custom;
+    }
+
+    pub fn disable_all_global<'a>(&mut self, all_pkgs: impl IntoIterator<Item = &'a str>) {
+        for pkg in all_pkgs {
+            self.disabled_packages.insert(pkg.to_string());
+        }
+        self.preset = InstallPreset::Custom;
+    }
+
+    pub fn invert_all_global<'a>(&mut self, all_pkgs: impl IntoIterator<Item = &'a str>) {
+        for pkg in all_pkgs {
+            if self.disabled_packages.contains(pkg) {
+                self.disabled_packages.remove(pkg);
+            } else {
+                self.disabled_packages.insert(pkg.to_string());
+            }
         }
         self.preset = InstallPreset::Custom;
     }

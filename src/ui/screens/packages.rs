@@ -170,24 +170,42 @@ fn render_packages(
     f.render_widget(p, chunks[0]);
 
     // Bulk action bar
+    let all_pkgs = crate::distro::arch::all_arch_packages();
+    let total_all = all_pkgs.len();
+    let enabled_all = all_pkgs.iter().filter(|&&p| state.config.is_package_enabled(p)).count();
+    let excluded_all = total_all.saturating_sub(enabled_all);
+
+    let stats_span = if excluded_all == 0 {
+        Span::styled(format!("All {} Packages Active (Full Rice)", total_all), Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD))
+    } else {
+        Span::styled(format!("{}/{} Packages Active ({} Excluded)", enabled_all, total_all, excluded_all), Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD))
+    };
+
     let action_lines = vec![
         Line::from(vec![
-            Span::styled("Shortcuts: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled("Category: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
             Span::styled("[Space] ", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
-            Span::styled("Toggle   ", Style::default().fg(COLOR_TEXT)),
+            Span::styled("Toggle  ", Style::default().fg(COLOR_TEXT)),
             Span::styled("[A] ", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
-            Span::styled("Select All   ", Style::default().fg(COLOR_TEXT)),
+            Span::styled("Select Cat  ", Style::default().fg(COLOR_TEXT)),
             Span::styled("[N] ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
-            Span::styled("Deselect All   ", Style::default().fg(COLOR_TEXT)),
+            Span::styled("Deselect Cat  ", Style::default().fg(COLOR_TEXT)),
             Span::styled("[I] ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled("Invert", Style::default().fg(COLOR_TEXT)),
+            Span::styled("Invert Cat", Style::default().fg(COLOR_TEXT)),
         ]),
         Line::from(vec![
-            Span::styled("Press ", Style::default().fg(COLOR_DARK)),
-            Span::styled("[Enter]", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
-            Span::styled(" or ", Style::default().fg(COLOR_DARK)),
-            Span::styled("[Esc]", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
-            Span::styled(" to save changes and return to Configuration.", Style::default().fg(COLOR_WHITE)),
+            Span::styled("GLOBAL:   ", Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD)),
+            Span::styled("[U / Shift+A] ", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled("SELECT ALL PACKAGES   ", Style::default().fg(COLOR_WHITE)),
+            Span::styled("[X / Shift+N] ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+            Span::styled("DESELECT ALL PACKAGES", Style::default().fg(COLOR_WHITE)),
+        ]),
+        Line::from(vec![
+            Span::styled("Status: ", Style::default().fg(COLOR_CYAN)),
+            stats_span,
+            Span::raw("   •   "),
+            Span::styled("[Enter / Esc] ", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled("Save Selection & Return", Style::default().fg(COLOR_WHITE)),
         ]),
     ];
 

@@ -44,12 +44,11 @@ impl AppScreen {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigSection {
     Preset,
-    Mode,
-    Neovim,
-    Terminal,
-    Components,
+    Developer,
+    Aesthetics,
     Theme,
-    DryRun,
+    SystemFlags,
+    Components,
 }
 
 pub struct AppState {

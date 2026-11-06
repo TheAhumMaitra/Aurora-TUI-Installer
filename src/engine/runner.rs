@@ -328,6 +328,18 @@ fn execute_single_step(
                 Ok(())
             })
         }
+        "arch_browser" => {
+            if let Some(pkg) = config.browser_choice.package_name() {
+                runner.log_info(format!("Installing default browser: {} ({})", config.browser_choice.short_name(), pkg));
+                if config.browser_choice.is_aur() {
+                    let aur_bin = if which::which("paru").is_ok() { "paru" } else { "yay" };
+                    let _ = runner.run_command(aur_bin, &["-S", "--needed", "--noconfirm", pkg]);
+                } else {
+                    let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", pkg]);
+                }
+            }
+            Ok(())
+        }
         "arch_gaming" => {
             runner.log_info("Installing Steam, GameMode, and MangoHud gaming packages...");
             let mut args = vec!["pacman", "-S", "--needed", "--noconfirm"];
@@ -338,21 +350,52 @@ fn execute_single_step(
             })
         }
         "arch_sddm" => {
-            runner.log_info("Setting up SDDM Astronaut Theme...");
-            runner.run_command(
-                "sudo",
-                &[
-                    "git",
-                    "clone",
-                    "-b",
-                    "master",
-                    "--depth",
-                    "1",
-                    "https://github.com/keyitdev/sddm-astronaut-theme.git",
-                    "/usr/share/sddm/themes/sddm-astronaut-theme",
-                ],
-            )?;
-            runner.run_command("sudo", &["systemctl", "enable", "sddm.service"]).or_else(|_| Ok(()))
+            use crate::model::config::DisplayManagerChoice;
+            match config.display_manager {
+                DisplayManagerChoice::SddmAstronaut => {
+                    runner.log_info("Setting up SDDM Astronaut Theme...");
+                    let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "sddm"]);
+                    let _ = runner.run_command(
+                        "sudo",
+                        &[
+                            "git",
+                            "clone",
+                            "-b",
+                            "master",
+                            "--depth",
+                            "1",
+                            "https://github.com/keyitdev/sddm-astronaut-theme.git",
+                            "/usr/share/sddm/themes/sddm-astronaut-theme",
+                        ],
+                    );
+                    runner.run_command("sudo", &["systemctl", "enable", "sddm.service"]).or_else(|_| Ok(()))
+                }
+                DisplayManagerChoice::LyMatrix => {
+                    runner.log_info("Setting up Ly lightweight console display manager...");
+                    let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "ly"]);
+                    runner.run_command("sudo", &["systemctl", "enable", "ly.service"]).or_else(|_| Ok(()))
+                }
+                DisplayManagerChoice::GreetdTuigreet => {
+                    runner.log_info("Setting up Greetd + Tuigreet Wayland greeter...");
+                    let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "greetd", "greetd-tuigreet"]);
+                    runner.run_command("sudo", &["systemctl", "enable", "greetd.service"]).or_else(|_| Ok(()))
+                }
+                DisplayManagerChoice::NoneTty => {
+                    runner.log_info("Direct TTY login configured (no display manager service enabled)");
+                    Ok(())
+                }
+            }
+        }
+        "arch_audio" => {
+            runner.log_info("Deploying EasyEffects Studio DSP sound suite...");
+            let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "easyeffects", "lsp-plugins"]);
+            Ok(())
+        }
+        "arch_tweaks" => {
+            runner.log_info("Applying kernel and process performance optimizations...");
+            let _ = runner.run_command("sudo", &["pacman", "-S", "--needed", "--noconfirm", "ananicy-cpp", "zram-generator"]);
+            let _ = runner.run_command("sudo", &["systemctl", "enable", "--now", "ananicy-cpp.service"]);
+            Ok(())
         }
         "arch_rust_scripts" => {
             runner.log_info("Compiling Aurora Rust scripts...");
