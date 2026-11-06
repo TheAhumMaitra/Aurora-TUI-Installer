@@ -32,6 +32,7 @@ use model::theme::AVAILABLE_THEMES;
 use ratatui::backend::CrosstermBackend;
 use ratatui::Terminal;
 use std::io::{self, stdout};
+use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -421,6 +422,25 @@ fn run_headless(state: &mut AppState) {
     println!("Dry Run:             {}", state.config.dry_run);
     println!("===========================================");
 
+    if !state.config.dry_run && !state.distro_info.is_root {
+        if !engine::check_sudo_cached() {
+            println!("\n[Aurora Installer] Administrative (sudo) privileges required.");
+            println!("Please enter your sudo password in the terminal below:\n");
+            let status = Command::new("sudo")
+                .arg("-v")
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit())
+                .status();
+
+            if !status.map(|s| s.success()).unwrap_or(false) {
+                eprintln!("\nError: Sudo authentication failed or was cancelled. Aborting installation.");
+                std::process::exit(1);
+            }
+            println!("\n[✓] Sudo authentication verified successfully.\n");
+        }
+    }
+
     state.start_installation();
 
     while state.is_installing {
@@ -455,7 +475,7 @@ fn run_tui_loop(
         if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    handle_key_event(state, key.code, key.modifiers);
+                    handle_key_event(state, key.code, key.modifiers, terminal)?;
                 }
             }
         }
@@ -469,13 +489,83 @@ fn run_tui_loop(
     Ok(())
 }
 
-fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers) {
+fn trigger_installation(
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    state: &mut AppState,
+) -> io::Result<()> {
+    if state.config.dry_run || state.distro_info.is_root || engine::check_sudo_cached() {
+        state.sudo_error = None;
+        state.is_sudo_cached = true;
+        state.start_installation();
+        return Ok(());
+    }
+
+    // Temporarily exit TUI alternate screen and raw mode for clean terminal password entry
+    disable_raw_mode()?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+
+    println!();
+    println!("\x1b[1;36m╔════════════════════════════════════════════════════════════════════════════════╗\x1b[0m");
+    println!("\x1b[1;36m║                    AURORA INSTALLER - PRIVILEGE ESCALATION                     ║\x1b[0m");
+    println!("\x1b[1;36m╚════════════════════════════════════════════════════════════════════════════════╝\x1b[0m");
+    println!();
+    println!("\x1b[1mNotice:\x1b[0m Installing system packages, configuring display managers, and");
+    println!("        enabling systemd services require administrative (sudo) privileges.");
+    println!();
+    println!("Please enter your sudo password in the terminal below:");
+    println!();
+
+    let status = Command::new("sudo")
+        .arg("-v")
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status();
+
+    let auth_ok = status.map(|s| s.success()).unwrap_or(false);
+
+    if auth_ok {
+        println!();
+        println!("\x1b[1;32m[✓] Sudo authentication verified successfully. Resuming installer...\x1b[0m");
+        std::thread::sleep(Duration::from_millis(600));
+    } else {
+        println!();
+        println!("\x1b[1;31m[✗] Sudo authentication failed or was cancelled.\x1b[0m");
+        std::thread::sleep(Duration::from_millis(1200));
+    }
+
+    // Re-enter TUI alternate screen & raw mode
+    execute!(terminal.backend_mut(), EnterAlternateScreen)?;
+    enable_raw_mode()?;
+    terminal.clear()?;
+
+    if auth_ok {
+        state.sudo_error = None;
+        state.is_sudo_cached = true;
+        state.start_installation();
+    } else {
+        state.sudo_error = Some(
+            "Sudo authentication failed or was cancelled. Press [Enter] or [Y] to retry."
+                .to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+fn handle_key_event(
+    state: &mut AppState,
+    code: KeyCode,
+    modifiers: KeyModifiers,
+    terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> io::Result<()> {
     // Global exit shortcut: Ctrl+C
     if modifiers.contains(KeyModifiers::CONTROL)
         && (code == KeyCode::Char('c') || code == KeyCode::Char('C'))
     {
         state.should_exit = true;
-        return;
+        return Ok(());
     }
 
     // Global 'q' / 'Q' exit shortcut at any time (except when actively typing in package search)
@@ -483,7 +573,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         && !(state.current_screen == AppScreen::PackageSelection && state.package_search_active)
     {
         state.should_exit = true;
-        return;
+        return Ok(());
     }
 
     match state.current_screen {
@@ -724,6 +814,8 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             },
             KeyCode::Enter => {
                 state.refresh_steps();
+                state.refresh_sudo_status();
+                state.sudo_error = None;
                 state.current_screen = AppScreen::Summary;
             }
             KeyCode::Esc => {
@@ -766,7 +858,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     }
                     _ => {}
                 }
-                return;
+                return Ok(());
             }
 
             let groups = state.selected_distro.package_groups();
@@ -883,9 +975,10 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
 
         AppScreen::Summary => match code {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
-                state.start_installation();
+                trigger_installation(terminal, state)?;
             }
             KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('B') => {
+                state.sudo_error = None;
                 state.current_screen = AppScreen::Configuration;
             }
             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -924,4 +1017,6 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             _ => {}
         },
     }
+
+    Ok(())
 }

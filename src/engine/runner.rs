@@ -10,8 +10,82 @@ use crate::model::config::{dirs_home, InstallConfig, InstallMode};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
-use std::time::Instant;
+use std::sync::Arc;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
+
+/// Checks if non-interactive sudo is available and validated (cached timestamp).
+pub fn check_sudo_cached() -> bool {
+    if which::which("sudo").is_err() {
+        return false;
+    }
+    Command::new("sudo")
+        .args(["-v", "-n"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Sudo keepalive worker that periodically refreshes the sudo timestamp
+/// so long-running steps (e.g. pacman compilation or downloads) do not time out.
+pub struct SudoKeepalive {
+    running: Arc<AtomicBool>,
+    handle: Option<JoinHandle<()>>,
+}
+
+impl SudoKeepalive {
+    pub fn start() -> Self {
+        let running = Arc::new(AtomicBool::new(true));
+        let running_clone = running.clone();
+
+        let handle = thread::spawn(move || {
+            while running_clone.load(Ordering::Relaxed) {
+                // Sleep for up to 30 seconds with 500ms intervals for responsive shutdown
+                for _ in 0..60 {
+                    if !running_clone.load(Ordering::Relaxed) {
+                        return;
+                    }
+                    thread::sleep(Duration::from_millis(500));
+                }
+
+                if !running_clone.load(Ordering::Relaxed) {
+                    break;
+                }
+
+                // Refresh sudo timestamp non-interactively
+                let _ = Command::new("sudo")
+                    .args(["-v", "-n"])
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .status();
+            }
+        });
+
+        Self {
+            running,
+            handle: Some(handle),
+        }
+    }
+
+    pub fn stop(&mut self) {
+        self.running.store(false, Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for SudoKeepalive {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -108,6 +182,7 @@ impl StepRunner {
         self.log_debug(format!("Executing: {cmd_str}"));
         let child = Command::new(program)
             .args(args)
+            .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
@@ -167,6 +242,13 @@ pub fn execute_installation(
     let total_steps = steps.len();
     let mut all_succeeded = true;
 
+    // Start background sudo keepalive thread if not dry run
+    let mut keepalive = if !config.dry_run {
+        Some(SudoKeepalive::start())
+    } else {
+        None
+    };
+
     for (index, step) in steps.iter().enumerate() {
         let step_start = Instant::now();
         let _ = tx.send(EngineEvent::StepStarted {
@@ -212,6 +294,10 @@ pub fn execute_installation(
     };
 
     runner.log_success(&summary);
+
+    if let Some(mut k) = keepalive.take() {
+        k.stop();
+    }
 
     let _ = tx.send(EngineEvent::Finished {
         success: all_succeeded,
@@ -1481,5 +1567,30 @@ fn apply_theme(config: &InstallConfig, runner: &StepRunner) -> Result<(), String
     } else {
         runner.log_warn("Aurora CLI binary not yet in PATH; apply theme later with 'aurora apply-theme <name>'");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_check_sudo_cached_does_not_panic() {
+        let _ = check_sudo_cached();
+    }
+
+    #[test]
+    fn test_sudo_keepalive_lifecycle() {
+        let mut keepalive = SudoKeepalive::start();
+        std::thread::sleep(Duration::from_millis(50));
+        keepalive.stop();
+        keepalive.stop();
+    }
+
+    #[test]
+    fn test_sudo_keepalive_drop() {
+        let keepalive = SudoKeepalive::start();
+        std::thread::sleep(Duration::from_millis(50));
+        drop(keepalive);
     }
 }

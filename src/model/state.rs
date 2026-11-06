@@ -77,6 +77,8 @@ pub struct AppState {
     pub install_finished: bool,
     pub install_success: bool,
     pub summary_message: String,
+    pub is_sudo_cached: bool,
+    pub sudo_error: Option<String>,
     pub spinner_tick: usize,
     pub should_exit: bool,
     pub tx_events: Sender<EngineEvent>,
@@ -87,6 +89,11 @@ impl AppState {
     pub fn new(distro_info: DistroInfo, initial_config: InstallConfig) -> Self {
         let (tx_events, rx_events) = channel();
         let selected_distro = distro_info.family;
+        let is_sudo_cached = if distro_info.is_root {
+            true
+        } else {
+            crate::engine::check_sudo_cached()
+        };
 
         let mut app = Self {
             current_screen: AppScreen::Welcome,
@@ -111,6 +118,8 @@ impl AppState {
             install_finished: false,
             install_success: false,
             summary_message: String::new(),
+            is_sudo_cached,
+            sudo_error: None,
             spinner_tick: 0,
             should_exit: false,
             tx_events,
@@ -119,6 +128,14 @@ impl AppState {
 
         app.refresh_steps();
         app
+    }
+
+    pub fn refresh_sudo_status(&mut self) {
+        if self.distro_info.is_root {
+            self.is_sudo_cached = true;
+        } else {
+            self.is_sudo_cached = crate::engine::check_sudo_cached();
+        }
     }
 
     pub fn refresh_steps(&mut self) {
@@ -229,5 +246,27 @@ impl AppState {
     pub fn spinner_char(&self) -> char {
         const SPINNER: &[char] = &['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
         SPINNER[self.spinner_tick % SPINNER.len()]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_state_sudo_refresh() {
+        let info = DistroInfo::detect();
+        let config = InstallConfig::default();
+        let mut state = AppState::new(info, config);
+
+        let initial = state.is_sudo_cached;
+        state.refresh_sudo_status();
+        assert_eq!(state.is_sudo_cached, initial);
+
+        assert!(state.sudo_error.is_none());
+        state.sudo_error = Some("Test authentication error".to_string());
+        assert_eq!(state.sudo_error.as_deref(), Some("Test authentication error"));
+        state.sudo_error = None;
+        assert!(state.sudo_error.is_none());
     }
 }

@@ -115,12 +115,37 @@ fn render_summary_card(f: &mut Frame, state: &AppState, area: Rect) {
                 Style::default().fg(COLOR_TEXT),
             ),
         ]),
+        Line::from(vec![
+            Span::styled("Privilege Status:  ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            if state.distro_info.is_root {
+                Span::styled("Root user (Full administrative access)", Style::default().fg(COLOR_GREEN))
+            } else if state.config.dry_run {
+                Span::styled("Dry-run mode (No sudo escalation needed)", Style::default().fg(COLOR_YELLOW))
+            } else if state.is_sudo_cached {
+                Span::styled("Active (Cached - ready to install without prompt)", Style::default().fg(COLOR_GREEN))
+            } else {
+                Span::styled("Password required (Will prompt in terminal on launch)", Style::default().fg(COLOR_YELLOW))
+            },
+        ]),
         Line::from(""),
-        Line::from(Span::styled("Note: Installation requires sudo for system package operations.", Style::default().fg(COLOR_DARK))),
+        if let Some(ref err) = state.sudo_error {
+            Line::from(vec![
+                Span::styled("▲ ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+                Span::styled(err.as_str(), Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+            ])
+        } else {
+            Line::from(Span::styled("Note: Installation requires sudo for system package operations.", Style::default().fg(COLOR_DARK)))
+        },
     ];
 
     let p = Paragraph::new(lines);
     f.render_widget(p, chunks[0]);
+
+    let confirm_action = if state.is_sudo_cached || state.config.dry_run || state.distro_info.is_root {
+        " to launch the installation pipeline."
+    } else {
+        " to enter sudo password in terminal and launch."
+    };
 
     // Confirmation box
     let confirm_lines = vec![
@@ -131,7 +156,7 @@ fn render_summary_card(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled("[ Enter ]", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
             Span::styled(" or ", Style::default().fg(COLOR_DARK)),
             Span::styled("[ Y ]", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
-            Span::styled(" to launch the installation pipeline.", Style::default().fg(COLOR_WHITE)),
+            Span::styled(confirm_action, Style::default().fg(COLOR_WHITE)),
         ]),
         Line::from(vec![
             Span::styled("Press ", Style::default().fg(COLOR_DARK)),

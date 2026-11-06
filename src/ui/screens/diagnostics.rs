@@ -162,7 +162,11 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
     }
 
     if !info.is_root {
-        check_lines.push(pass("Running under regular user with sudo privilege"));
+        if state.is_sudo_cached {
+            check_lines.push(pass("Regular user with active sudo privileges (cached)"));
+        } else {
+            check_lines.push(pass("Regular user with sudo capability (password prompt ready)"));
+        }
     } else {
         check_lines.push(warn("Running directly as root user (Warning: configs will deploy to /root)"));
     }

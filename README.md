@@ -238,6 +238,13 @@ Preview all commands, configurations, and scripts safely without modifying your 
 ./target/release/aurora-installer --dry-run
 ```
 
+### Seamless Sudo Privilege Escalation & Keepalive
+System-level operations (package installations, systemd services, display managers) require `sudo` privileges. The installer provides seamless privilege escalation:
+- **Clean Terminal Password Prompt**: If sudo credentials are not already cached, the installer cleanly suspends the TUI upon confirmation, prompts for your password in your standard terminal, verifies it with `sudo -v`, and seamlessly resumes the TUI.
+- **Background Sudo Keepalive**: During the entire installation pipeline, a background worker automatically refreshes the sudo timestamp (`sudo -v -n`) every 30 seconds, preventing credentials from expiring during long-running builds or downloads.
+- **Non-Interactive Mode Support**: When running with `--non-interactive`, sudo credentials are pre-verified in the terminal before execution starts.
+- **Dry-Run Safe**: In `--dry-run` or root user mode, privilege escalation is automatically bypassed.
+
 ### Hardware & System Preflight Diagnostics
 Run hardware, kernel, memory, storage, laptop battery, and GPU audits:
 ```bash

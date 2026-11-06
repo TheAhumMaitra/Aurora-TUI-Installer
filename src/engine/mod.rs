@@ -7,5 +7,6 @@ pub mod step;
 
 #[allow(unused_imports)]
 pub use doctor::{run_doctor, print_doctor_report, DoctorReport};
-pub use runner::execute_installation;
+#[allow(unused_imports)]
+pub use runner::{check_sudo_cached, execute_installation, SudoKeepalive};
 pub use step::StepStatus;
