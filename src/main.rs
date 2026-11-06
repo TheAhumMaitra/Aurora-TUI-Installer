@@ -9,8 +9,9 @@ mod ui;
 
 use clap::Parser;
 use cli::{
-    AudioArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, FontArg, LauncherArg,
-    LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
+    AudioArg, BackupArg, BarLayoutArg, BrowserArg, CliArgs, DisplayManagerArg, FontArg, GpuArg,
+    LauncherArg, LockscreenArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg, TweaksArg,
+    WallpaperArg,
 };
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -19,9 +20,10 @@ use crossterm::{
 };
 use distro::DistroInfo;
 use model::config::{
-    AudioSuiteChoice, BarLayoutChoice, BrowserChoice, Component, DisplayManagerChoice,
-    FontChoice, InstallConfig, InstallMode, InstallPreset, KernelTweakProfile, LauncherStyle,
-    LockscreenChoice, NeovimPreset, ShellChoice, TerminalChoice,
+    AudioSuiteChoice, BackupStrategy, BarLayoutChoice, BrowserChoice, Component,
+    DisplayManagerChoice, FontChoice, GpuProfile, InstallConfig, InstallMode, InstallPreset,
+    KernelTweakProfile, LauncherStyle, LockscreenChoice, NeovimPreset, ShellChoice, TerminalChoice,
+    WallpaperEngine,
 };
 use model::state::{AppScreen, AppState, ConfigSection};
 use model::theme::AVAILABLE_THEMES;
@@ -36,8 +38,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // System detection
     let distro_info = DistroInfo::detect();
 
-    // Prepare default config
-    let mut config = InstallConfig::default();
+    // Fast-path hardware diagnostics report check
+    if args.diagnostics {
+        print_diagnostics_report(&distro_info);
+        return Ok(());
+    }
+
+    // Prepare default config or import from profile
+    let mut config = if let Some(ref profile_path) = args.profile {
+        println!("Loading Aurora installer profile from: {}", profile_path.display());
+        InstallConfig::import_from_json(profile_path)?
+    } else {
+        InstallConfig::default()
+    };
 
     // Override with CLI flags
     if args.dry_run {
@@ -141,6 +154,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             LockscreenArg::None => LockscreenChoice::None,
         };
     }
+    if let Some(gpu) = args.gpu {
+        config.gpu_profile = match gpu {
+            GpuArg::Auto => GpuProfile::AutoDetect,
+            GpuArg::Nvidia => GpuProfile::NvidiaProprietary,
+            GpuArg::Amd => GpuProfile::AmdMesa,
+            GpuArg::Intel => GpuProfile::IntelMesa,
+            GpuArg::VirtualMachine => GpuProfile::VirtualMachine,
+        };
+    }
+    if let Some(wp) = args.wallpaper {
+        config.wallpaper_engine = match wp {
+            WallpaperArg::Swww => WallpaperEngine::Swww,
+            WallpaperArg::Hyprpaper => WallpaperEngine::Hyprpaper,
+            WallpaperArg::Awww => WallpaperEngine::Awww,
+            WallpaperArg::MpvPaper => WallpaperEngine::MpvPaper,
+        };
+    }
+    if let Some(bk) = args.backup {
+        config.backup_strategy = match bk {
+            BackupArg::Timestamped => BackupStrategy::Timestamped,
+            BackupArg::DirectOverwrite => BackupStrategy::DirectOverwrite,
+            BackupArg::SkipExisting => BackupStrategy::SkipExisting,
+        };
+    }
+    if let Some(ref export_path) = args.export_profile {
+        config.export_to_json(export_path)?;
+        println!("Successfully exported Aurora installer profile to: {}", export_path.display());
+        return Ok(());
+    }
     if let Some(explicit_pkgs) = args.packages {
         let all = distro::arch::all_arch_packages();
         config.disable_all_global(all);
@@ -193,6 +235,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn print_diagnostics_report(info: &DistroInfo) {
+    println!("================================================================================");
+    println!("             AURORA PREFLIGHT HARDWARE & SYSTEM DIAGNOSTICS                     ");
+    println!("================================================================================");
+    println!("Operating System:    {}", info.arch_flavor);
+    println!("Kernel Version:      {} ({})", info.kernel, info.arch);
+    println!("Firmware Mode:       {}", if info.is_uefi { "UEFI Mode (Optimal)" } else { "Legacy BIOS" });
+    println!("Processor (CPU):     {} ({} cores)", info.cpu_model, info.cpu_cores);
+    println!("Memory (RAM):        {:.1} GB total ({:.1} GB available)", info.total_ram_gb, info.available_ram_gb);
+    println!("Storage (/home):     {:.1} GB free space", info.home_free_gb);
+    println!("Graphics Hardware:   {}", info.gpu.label());
+    println!("Package Manager:     {}", if info.pacman_available { "pacman (found)" } else { "none" });
+    println!("AUR Helper:          {}", info.aur_helper.as_deref().unwrap_or("none (will bootstrap yay)"));
+    println!("Session User:        {} (root: {})", info.current_user, info.is_root);
+    println!("Wayland / Hyprland:  {}", if info.hyprland_running { "Hyprland session active" } else { "Ready for Wayland launch" });
+    println!("--------------------------------------------------------------------------------");
+    let all_ok = info.is_arch_compatible && info.home_free_gb >= 5.0 && info.total_ram_gb >= 2.0;
+    if all_ok {
+        println!("PREFLIGHT RESULT:    10/10 PASS - System is fully compatible with Aurora!");
+    } else {
+        println!("PREFLIGHT RESULT:    MINOR WARNINGS DETECTED - Installation can proceed.");
+    }
+    println!("================================================================================");
+}
+
 fn run_headless(state: &mut AppState) {
     println!("=== Aurora Non-Interactive Installation ===");
     println!("Detected System:     {}", state.distro_info.arch_flavor);
@@ -220,12 +287,16 @@ fn run_headless(state: &mut AppState) {
             .as_deref()
             .unwrap_or("none (will bootstrap yay)")
     );
+    println!("GPU Hardware:        {}", state.distro_info.gpu.label());
+    println!("GPU Profile:         {}", state.config.gpu_profile.label());
     println!("Installation Mode:   {:?}", state.config.mode);
     println!("Neovim Preset:       {}", state.config.neovim_preset.label());
     println!("Terminal Choice:     {}", state.config.terminal_choice.label());
     println!("Web Browser:         {}", state.config.browser_choice.label());
     println!("Display Manager:     {}", state.config.display_manager.label());
     println!("Lockscreen Daemon:   {}", state.config.lockscreen.label());
+    println!("Wallpaper Engine:    {}", state.config.wallpaper_engine.label());
+    println!("Backup Strategy:     {}", state.config.backup_strategy.label());
     println!("Monospace Font:      {}", state.config.font_choice.label());
     println!("Waybar Layout:       {}", state.config.bar_layout.label());
     println!("Rofi Launcher:       {}", state.config.launcher_style.label());
@@ -300,6 +371,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         AppScreen::Welcome => match code {
             KeyCode::Enter => {
                 state.current_screen = AppScreen::Configuration;
+            }
+            KeyCode::Char('i') | KeyCode::Char('I') => {
+                state.current_screen = AppScreen::Diagnostics;
             }
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
                 state.should_exit = true;
@@ -384,6 +458,21 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             KeyCode::Char('f') | KeyCode::Char('F') => {
                 state.config.font_choice = state.config.font_choice.cycle();
                 state.refresh_steps();
+            }
+            KeyCode::Char('j') | KeyCode::Char('J') => {
+                state.config.wallpaper_engine = state.config.wallpaper_engine.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                state.config.gpu_profile = state.config.gpu_profile.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('u') | KeyCode::Char('U') => {
+                state.config.backup_strategy = state.config.backup_strategy.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('i') | KeyCode::Char('I') => {
+                state.current_screen = AppScreen::Diagnostics;
             }
             KeyCode::Char('e') | KeyCode::Char('E') => {
                 state.config.audio_suite = state.config.audio_suite.cycle();
@@ -630,6 +719,13 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 _ => {}
             }
         }
+
+        AppScreen::Diagnostics => match code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char('i') | KeyCode::Char('I') => {
+                state.current_screen = AppScreen::Configuration;
+            }
+            _ => {}
+        },
 
         AppScreen::Summary => match code {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {

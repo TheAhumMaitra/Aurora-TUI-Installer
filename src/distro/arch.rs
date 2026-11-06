@@ -4,8 +4,8 @@
 use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
 use crate::model::config::{
-    AudioSuiteChoice, BrowserChoice, Component, DisplayManagerChoice, InstallConfig,
-    InstallMode, KernelTweakProfile, NeovimPreset,
+    AudioSuiteChoice, BackupStrategy, BrowserChoice, Component, DisplayManagerChoice,
+    GpuProfile, InstallConfig, InstallMode, KernelTweakProfile, NeovimPreset,
 };
 
 pub const PACMAN_CORE: &[&str] = &[
@@ -118,6 +118,7 @@ pub const ALL_ARCH_PACKAGES: &[&str] = &[
     "cliphist",
     "cmake",
     "curl",
+    "egl-wayland",
     "eog",
     "evince",
     "foot",
@@ -132,6 +133,7 @@ pub const ALL_ARCH_PACKAGES: &[&str] = &[
     "hyprland",
     "hyprlock",
     "hyprmoncfg-bin",
+    "hyprpaper",
     "hyprshot",
     "hyprshutdown",
     "hyprwave",
@@ -142,12 +144,15 @@ pub const ALL_ARCH_PACKAGES: &[&str] = &[
     "llvm",
     "mangohud",
     "mise",
+    "mpvpaper",
     "nemo",
     "neovim",
     "networkmanager",
     "nordzy-hyprcursors",
     "noto-fonts",
     "noto-fonts-emoji",
+    "nvidia-dkms",
+    "nvidia-utils",
     "papirus-icon-theme",
     "parole",
     "pipewire",
@@ -168,6 +173,7 @@ pub const ALL_ARCH_PACKAGES: &[&str] = &[
     "sudo-rs",
     "swaylock",
     "swaync",
+    "swww",
     "ttf-cascadia-code-nerd",
     "ttf-dejavu",
     "ttf-firacode-nerd",
@@ -235,6 +241,10 @@ pub const ARCH_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
 pub fn package_category_badge(pkg: &str) -> &'static str {
     if pkg.starts_with("ttf-") || pkg.starts_with("noto-") {
         "Font"
+    } else if pkg.starts_with("nvidia-") || pkg == "egl-wayland" {
+        "GPU"
+    } else if pkg == "swww" || pkg == "hyprpaper" || pkg == "mpvpaper" || pkg == "awww" {
+        "Wallpaper"
     } else if PACMAN_CORE.contains(&pkg) {
         "Core"
     } else if PACMAN_DAEMONS.contains(&pkg) {
@@ -260,6 +270,15 @@ pub fn all_arch_packages() -> Vec<&'static str> {
 
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
+
+    // 0. Backup existing configs if requested
+    if config.backup_strategy == BackupStrategy::Timestamped {
+        steps.push(InstallStep::new(
+            "arch_backup",
+            "Archive Existing Dotfiles (Timestamped Backup)",
+            "Safely backup existing ~/.config configurations before deploying Aurora",
+        ));
+    }
 
     // 1. Preflight
     steps.push(InstallStep::new(
@@ -359,7 +378,23 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 11. Dotfiles with Custom Bar Layout & Launcher Styling
+    // 11. GPU Acceleration (NVIDIA DKMS & Wayland Envs)
+    if config.gpu_profile == GpuProfile::NvidiaProprietary {
+        steps.push(InstallStep::new(
+            "arch_gpu",
+            "Configure NVIDIA Drivers & Wayland Acceleration Envs",
+            "Install nvidia-dkms, egl-wayland, and inject hardware acceleration variables into Hyprland",
+        ));
+    }
+
+    // 12. Wallpaper Engine
+    steps.push(InstallStep::new(
+        "arch_wallpaper",
+        format!("Deploy Wallpaper Engine ({})", config.wallpaper_engine.short_name()),
+        format!("Setup {} wallpaper daemon for desktop background management", config.wallpaper_engine.label()),
+    ));
+
+    // 13. Dotfiles with Custom Bar Layout & Launcher Styling
     if config.is_component_selected(Component::Dotfiles) {
         steps.push(InstallStep::new(
             "arch_dotfiles",
@@ -432,5 +467,7 @@ mod tests {
         assert_eq!(package_category_badge("steam"), "Gaming");
         assert_eq!(package_category_badge("git"), "Build");
         assert_eq!(package_category_badge("cliphist"), "Utils");
+        assert_eq!(package_category_badge("nvidia-dkms"), "GPU");
+        assert_eq!(package_category_badge("swww"), "Wallpaper");
     }
 }

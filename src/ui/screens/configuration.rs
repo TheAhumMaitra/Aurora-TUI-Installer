@@ -30,9 +30,9 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([
             Constraint::Length(5), // 1. Preset & Package Shortcuts
             Constraint::Length(5), // 2. Developer Suite & Web Core
-            Constraint::Length(7), // 3. Rice Aesthetics (Bar, Launcher, DM, Motion, Lock, Font)
+            Constraint::Length(7), // 3. Rice Aesthetics (Bar, Launcher, Lock, Font, Wallpaper, DM, Motion)
             Constraint::Min(6),    // 4. Theme picker with live palette swatches
-            Constraint::Length(5), // 5. Audio, Kernel & Flags
+            Constraint::Length(6), // 5. Hardware, GPU, Backup, Kernel & Flags
         ])
         .split(area);
 
@@ -122,10 +122,10 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     .block(dev_block.padding(Padding::horizontal(1)));
     f.render_widget(dev_p, chunks[1]);
 
-    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Lockscreen, Font, Motion)
+    // 3. Desktop Rice Aesthetics (Waybar, Rofi, Display Manager, Lockscreen, Font, Wallpaper, Motion)
     let aes_active = state.active_config_section == ConfigSection::Aesthetics;
     let aes_block = if aes_active {
-        active_block(" 3. Desktop Rice Aesthetics [B: Bar, R: Rofi, C: Lock, F: Font, L: DM, O: Anim] ")
+        active_block(" 3. Desktop Rice Aesthetics [B: Bar, R: Rofi, C: Lock, F: Font, J: Wall, L: DM, O: Anim] ")
     } else {
         default_block(" 3. Desktop Rice Aesthetics ")
     };
@@ -149,10 +149,17 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         Line::from(vec![
             Span::styled("Lockscreen:  ", Style::default().fg(COLOR_CYAN)),
             Span::styled(
-                state.config.lockscreen.label(),
+                state.config.lockscreen.short_name(),
                 Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD),
             ),
             Span::styled(" [C]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Wallpaper: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(
+                state.config.wallpaper_engine.short_name(),
+                Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" [J]", Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
             Span::styled("Mono Font:   ", Style::default().fg(COLOR_CYAN)),
@@ -224,12 +231,12 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
         .block(theme_block.padding(Padding::horizontal(1)));
     f.render_widget(theme_p, chunks[3]);
 
-    // 5. Audio, Performance & System Flags
+    // 5. Hardware, GPU, Backup, Audio & Flags
     let flags_active = state.active_config_section == ConfigSection::SystemFlags;
     let flags_block = if flags_active {
-        active_block(" 5. Audio & Performance Flags [E: Sound, Z: Kernel, H: Shell, G, D, S] ")
+        active_block(" 5. Hardware, GPU & Performance [Y: GPU, U: Backup, I: Audit, E, Z, H, G, D, S] ")
     } else {
-        default_block(" 5. Audio & Performance Flags ")
+        default_block(" 5. Hardware, GPU & Performance ")
     };
 
     let dry_box = if state.config.dry_run {
@@ -245,12 +252,23 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     };
 
     let gaming_box = if state.config.is_component_selected(Component::GamingSuite) {
-        Span::styled("[X] Gaming Suite [G] (Steam, GameMode, MangoHud)", Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD))
+        Span::styled("[X] Gaming Suite [G]", Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD))
     } else {
-        Span::styled("[ ] Gaming Suite [G] (Steam, GameMode, MangoHud)", Style::default().fg(COLOR_DARK))
+        Span::styled("[ ] Gaming Suite [G]", Style::default().fg(COLOR_DARK))
     };
 
     let flags_p = Paragraph::new(vec![
+        Line::from(vec![
+            Span::styled("GPU Driver:    ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.gpu_profile.short_name(), Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
+            Span::styled(" [Y]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("Backup: ", Style::default().fg(COLOR_CYAN)),
+            Span::styled(state.config.backup_strategy.short_name(), Style::default().fg(COLOR_WHITE)),
+            Span::styled(" [U]", Style::default().fg(COLOR_DARK)),
+            Span::raw("   "),
+            Span::styled("[I: Sys Audit]", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+        ]),
         Line::from(vec![
             Span::styled("Sound Suite:   ", Style::default().fg(COLOR_CYAN)),
             Span::styled(state.config.audio_suite.label(), Style::default().fg(COLOR_WHITE)),

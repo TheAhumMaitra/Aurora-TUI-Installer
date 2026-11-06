@@ -56,6 +56,139 @@ impl DistroFamily {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DetectedGpu {
+    Nvidia(String),
+    Amd(String),
+    Intel(String),
+    Hybrid { primary: String, discrete: String },
+    VirtualMachine(String),
+    Unknown,
+}
+
+impl DetectedGpu {
+    pub fn label(&self) -> String {
+        match self {
+            Self::Nvidia(name) => format!("NVIDIA ({name})"),
+            Self::Amd(name) => format!("AMD Radeon ({name})"),
+            Self::Intel(name) => format!("Intel Iris/UHD ({name})"),
+            Self::Hybrid { primary, discrete } => format!("Hybrid ({primary} + {discrete})"),
+            Self::VirtualMachine(name) => format!("Virtual Machine ({name})"),
+            Self::Unknown => "Generic / Unknown Display Adapter".to_string(),
+        }
+    }
+
+    pub fn is_nvidia(&self) -> bool {
+        matches!(self, Self::Nvidia(_) | Self::Hybrid { .. })
+    }
+}
+
+pub fn is_uefi_mode() -> bool {
+    Path::new("/sys/firmware/efi").is_dir()
+}
+
+pub fn detect_gpu() -> DetectedGpu {
+    // 1. Try lspci for exact vendor and model strings
+    if let Ok(output) = std::process::Command::new("lspci").arg("-nn").output() {
+        if output.status.success() {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut vga_lines = Vec::new();
+            for line in text.lines() {
+                let lower = line.to_lowercase();
+                if lower.contains("vga compatible controller")
+                    || lower.contains("3d controller")
+                    || lower.contains("display controller")
+                {
+                    vga_lines.push(line.to_string());
+                }
+            }
+
+            if !vga_lines.is_empty() {
+                let has_nvidia = vga_lines
+                    .iter()
+                    .any(|l| l.contains("10de:") || l.to_lowercase().contains("nvidia"));
+                let has_amd = vga_lines.iter().any(|l| {
+                    l.contains("1002:")
+                        || l.to_lowercase().contains("amd")
+                        || l.to_lowercase().contains("advanced micro devices")
+                });
+                let has_intel = vga_lines
+                    .iter()
+                    .any(|l| l.contains("8086:") || l.to_lowercase().contains("intel"));
+                let has_vm = vga_lines.iter().any(|l| {
+                    let l = l.to_lowercase();
+                    l.contains("virtio")
+                        || l.contains("vmware")
+                        || l.contains("qemu")
+                        || l.contains("virtualbox")
+                });
+
+                if has_nvidia && (has_intel || has_amd) {
+                    let prim = if has_intel {
+                        "Intel UHD/Iris"
+                    } else {
+                        "AMD Radeon"
+                    };
+                    return DetectedGpu::Hybrid {
+                        primary: prim.to_string(),
+                        discrete: "NVIDIA Discrete GPU".to_string(),
+                    };
+                } else if has_nvidia {
+                    return DetectedGpu::Nvidia("NVIDIA GeForce/Quadro".to_string());
+                } else if has_amd {
+                    return DetectedGpu::Amd("AMD Radeon Graphics".to_string());
+                } else if has_intel {
+                    return DetectedGpu::Intel("Intel Graphics".to_string());
+                } else if has_vm {
+                    return DetectedGpu::VirtualMachine("Virtual Display (QEMU/VirtIO)".to_string());
+                }
+            }
+        }
+    }
+
+    // 2. Fallback: inspect /sys/class/drm/card*/device/vendor
+    let mut has_nvidia = false;
+    let mut has_amd = false;
+    let mut has_intel = false;
+    let mut has_vm = false;
+
+    if let Ok(entries) = fs::read_dir("/sys/class/drm") {
+        for entry in entries.flatten() {
+            let vendor_path = entry.path().join("device/vendor");
+            if let Ok(v) = fs::read_to_string(vendor_path) {
+                let v = v.trim().to_lowercase();
+                if v == "0x10de" {
+                    has_nvidia = true;
+                } else if v == "0x1002" {
+                    has_amd = true;
+                } else if v == "0x8086" {
+                    has_intel = true;
+                } else if v == "0x1af4" || v == "0x15ad" || v == "0x1ab8" {
+                    has_vm = true;
+                }
+            }
+        }
+    }
+
+    if has_nvidia && (has_intel || has_amd) {
+        let prim = if has_intel { "Intel" } else { "AMD" };
+        DetectedGpu::Hybrid {
+            primary: prim.to_string(),
+            discrete: "NVIDIA".to_string(),
+        }
+    } else if has_nvidia {
+        DetectedGpu::Nvidia("NVIDIA GPU".to_string())
+    } else if has_amd {
+        DetectedGpu::Amd("AMD Radeon GPU".to_string())
+    } else if has_intel {
+        DetectedGpu::Intel("Intel Integrated Graphics".to_string())
+    } else if has_vm {
+        DetectedGpu::VirtualMachine("Virtual Display".to_string())
+    } else {
+        DetectedGpu::Unknown
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DistroInfo {
     pub family: DistroFamily,
@@ -74,6 +207,9 @@ pub struct DistroInfo {
     pub total_ram_gb: f64,
     pub available_ram_gb: f64,
     pub cpu_cores: usize,
+    pub cpu_model: String,
+    pub is_uefi: bool,
+    pub gpu: DetectedGpu,
     pub git_available: bool,
     pub cargo_available: bool,
     pub hyprland_running: bool,
@@ -141,6 +277,14 @@ impl DistroInfo {
         let total_ram_gb = sys.total_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
         let available_ram_gb = sys.available_memory() as f64 / (1024.0 * 1024.0 * 1024.0);
         let cpu_cores = sys.cpus().len();
+        let cpu_model = sys
+            .cpus()
+            .first()
+            .map(|c| c.brand().trim().to_string())
+            .unwrap_or_else(|| "Multi-core Processor".to_string());
+
+        let is_uefi = is_uefi_mode();
+        let gpu = detect_gpu();
 
         let git_available = which("git").is_ok();
         let cargo_available = which("cargo").is_ok();
@@ -166,6 +310,9 @@ impl DistroInfo {
             total_ram_gb,
             available_ram_gb,
             cpu_cores,
+            cpu_model,
+            is_uefi,
+            gpu,
             git_available,
             cargo_available,
             hyprland_running,
@@ -324,5 +471,19 @@ mod tests {
         assert_eq!(detect_arch_flavor("arch", "Arch Linux", true), "Arch Linux (Pure)");
         assert_eq!(detect_arch_flavor("endeavouros", "EndeavourOS", true), "EndeavourOS");
         assert_eq!(detect_arch_flavor("garuda", "Garuda Linux", true), "Garuda Linux");
+    }
+
+    #[test]
+    fn test_detected_gpu_labels() {
+        let nvidia = DetectedGpu::Nvidia("RTX 4080".to_string());
+        assert!(nvidia.is_nvidia());
+        assert!(nvidia.label().contains("NVIDIA"));
+
+        let hybrid = DetectedGpu::Hybrid {
+            primary: "Intel".to_string(),
+            discrete: "NVIDIA".to_string(),
+        };
+        assert!(hybrid.is_nvidia());
+        assert!(hybrid.label().contains("Hybrid"));
     }
 }

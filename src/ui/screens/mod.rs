@@ -3,6 +3,7 @@
 
 pub mod complete;
 pub mod configuration;
+pub mod diagnostics;
 pub mod execution;
 pub mod packages;
 pub mod summary;

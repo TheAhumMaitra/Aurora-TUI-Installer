@@ -30,6 +30,7 @@ pub fn render_app(f: &mut Frame, state: &AppState) {
         AppScreen::Welcome => screens::welcome::render(f, state, chunks[1]),
         AppScreen::Configuration => screens::configuration::render(f, state, chunks[1]),
         AppScreen::PackageSelection => screens::packages::render(f, state, chunks[1]),
+        AppScreen::Diagnostics => screens::diagnostics::render(f, state, chunks[1]),
         AppScreen::Summary => screens::summary::render(f, state, chunks[1]),
         AppScreen::Execution => screens::execution::render(f, state, chunks[1]),
         AppScreen::Complete => screens::complete::render(f, state, chunks[1]),
@@ -121,6 +122,9 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 tag("Enter", "Proceed to Configuration")[0].clone(),
                 tag("Enter", "Proceed to Configuration")[1].clone(),
                 sep(),
+                tag("I", "Hardware Preflight Audit")[0].clone(),
+                tag("I", "Hardware Preflight Audit")[1].clone(),
+                sep(),
                 tag("Q / Esc", "Quit")[0].clone(),
                 tag("Q / Esc", "Quit")[1].clone(),
             ]),
@@ -131,10 +135,11 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
             for (k, d) in [
                 ("Tab", "Switch Card"),
                 ("Enter", "Review Plan"),
-                ("Esc", "Back"),
+                ("I", "Hardware Audit"),
                 ("K", "Package Customizer"),
                 ("A", "Select All Pkgs"),
                 ("X", "Deselect All Pkgs"),
+                ("Esc", "Back"),
             ] {
                 row1.extend(tag(k, d));
                 row1.push(sep());
@@ -151,6 +156,9 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
                 ("R", "Rofi"),
                 ("C", "Lockscreen"),
                 ("F", "Font"),
+                ("J", "Wallpaper"),
+                ("Y", "GPU"),
+                ("U", "Backup"),
                 ("E", "Audio DSP"),
                 ("Z", "Kernel"),
                 ("H", "Shell"),
@@ -166,6 +174,13 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
 
             vec![Line::from(row1), Line::from(row2)]
         }
+
+        AppScreen::Diagnostics => vec![
+            Line::from(vec![
+                tag("Esc / Enter / I", "Return to Installer Configuration")[0].clone(),
+                tag("Esc / Enter / I", "Return to Installer Configuration")[1].clone(),
+            ]),
+        ],
 
         AppScreen::PackageSelection => {
             let mut row1 = Vec::new();

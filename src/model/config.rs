@@ -3,7 +3,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InstallMode {
@@ -569,6 +569,150 @@ impl LockscreenChoice {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuProfile {
+    AutoDetect,
+    NvidiaProprietary,
+    AmdMesa,
+    IntelMesa,
+    VirtualMachine,
+}
+
+#[allow(dead_code)]
+impl GpuProfile {
+    pub const ALL: &[GpuProfile] = &[
+        GpuProfile::AutoDetect,
+        GpuProfile::NvidiaProprietary,
+        GpuProfile::AmdMesa,
+        GpuProfile::IntelMesa,
+        GpuProfile::VirtualMachine,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::AutoDetect => "Auto-Detect Hardware (Smart GPU Config)",
+            Self::NvidiaProprietary => "NVIDIA Proprietary + Hyprland Envs (DKMS + Wayland)",
+            Self::AmdMesa => "AMD Radeon Open-Source (Mesa + Vulkan-Radeon)",
+            Self::IntelMesa => "Intel Iris / Arc Open-Source (Mesa + Vulkan-Intel)",
+            Self::VirtualMachine => "Virtual Machine (VirtIO-GPU / VirGL 3D)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::AutoDetect => "Auto-Detect",
+            Self::NvidiaProprietary => "NVIDIA DKMS",
+            Self::AmdMesa => "AMD Mesa",
+            Self::IntelMesa => "Intel Mesa",
+            Self::VirtualMachine => "Virtual Machine",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            Self::AutoDetect => Self::NvidiaProprietary,
+            Self::NvidiaProprietary => Self::AmdMesa,
+            Self::AmdMesa => Self::IntelMesa,
+            Self::IntelMesa => Self::VirtualMachine,
+            Self::VirtualMachine => Self::AutoDetect,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WallpaperEngine {
+    Swww,
+    Hyprpaper,
+    Awww,
+    MpvPaper,
+}
+
+#[allow(dead_code)]
+impl WallpaperEngine {
+    pub const ALL: &[WallpaperEngine] = &[
+        WallpaperEngine::Swww,
+        WallpaperEngine::Hyprpaper,
+        WallpaperEngine::Awww,
+        WallpaperEngine::MpvPaper,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Swww => "SWWW (Smooth Fluid Animated Transitions & GIFs)",
+            Self::Hyprpaper => "Hyprpaper (Ultra-lightweight Fast C++ Daemon)",
+            Self::Awww => "AWWW (Simple Wayland Wallpaper Daemon)",
+            Self::MpvPaper => "mpvpaper (Live Desktop Video & Shaders)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::Swww => "SWWW Transitions",
+            Self::Hyprpaper => "Hyprpaper Native",
+            Self::Awww => "AWWW Lightweight",
+            Self::MpvPaper => "mpvpaper Video",
+        }
+    }
+
+    pub fn package_name(&self) -> &'static str {
+        match self {
+            Self::Swww => "swww",
+            Self::Hyprpaper => "hyprpaper",
+            Self::Awww => "awww",
+            Self::MpvPaper => "mpvpaper",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            Self::Swww => Self::Hyprpaper,
+            Self::Hyprpaper => Self::Awww,
+            Self::Awww => Self::MpvPaper,
+            Self::MpvPaper => Self::Swww,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackupStrategy {
+    Timestamped,
+    DirectOverwrite,
+    SkipExisting,
+}
+
+#[allow(dead_code)]
+impl BackupStrategy {
+    pub const ALL: &[BackupStrategy] = &[
+        BackupStrategy::Timestamped,
+        BackupStrategy::DirectOverwrite,
+        BackupStrategy::SkipExisting,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::Timestamped => "Timestamped Backup (~/.config/aurora_backups/)",
+            Self::DirectOverwrite => "Direct Overwrite (Keep existing files without backup)",
+            Self::SkipExisting => "Preserve Existing (Skip conflicting config files)",
+        }
+    }
+
+    pub fn short_name(&self) -> &'static str {
+        match self {
+            Self::Timestamped => "Timestamped Backup",
+            Self::DirectOverwrite => "Direct Overwrite",
+            Self::SkipExisting => "Preserve Existing",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            Self::Timestamped => Self::DirectOverwrite,
+            Self::DirectOverwrite => Self::SkipExisting,
+            Self::SkipExisting => Self::Timestamped,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Component {
     SystemPackages,
@@ -641,6 +785,9 @@ pub struct InstallConfig {
     pub launcher_style: LauncherStyle,
     pub font_choice: FontChoice,
     pub lockscreen: LockscreenChoice,
+    pub gpu_profile: GpuProfile,
+    pub wallpaper_engine: WallpaperEngine,
+    pub backup_strategy: BackupStrategy,
     pub audio_suite: AudioSuiteChoice,
     pub kernel_tweaks: KernelTweakProfile,
     pub shell_choice: ShellChoice,
@@ -684,6 +831,9 @@ impl Default for InstallConfig {
             launcher_style: LauncherStyle::Spotlight,
             font_choice: FontChoice::JetBrainsMono,
             lockscreen: LockscreenChoice::Hyprlock,
+            gpu_profile: GpuProfile::AutoDetect,
+            wallpaper_engine: WallpaperEngine::Swww,
+            backup_strategy: BackupStrategy::Timestamped,
             audio_suite: AudioSuiteChoice::EasyEffectsStudio,
             kernel_tweaks: KernelTweakProfile::Performance,
             shell_choice: ShellChoice::Fish,
@@ -804,6 +954,18 @@ impl InstallConfig {
         }
         self.preset = InstallPreset::Custom;
     }
+
+    pub fn export_to_json(&self, path: &Path) -> Result<(), std::io::Error> {
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(path, json)
+    }
+
+    pub fn import_from_json(path: &Path) -> Result<Self, std::io::Error> {
+        let content = std::fs::read_to_string(path)?;
+        serde_json::from_str(&content)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
+    }
 }
 
 pub fn dirs_home() -> Option<PathBuf> {
@@ -813,6 +975,44 @@ pub fn dirs_home() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_gpu_profile_cycling() {
+        let g = GpuProfile::AutoDetect;
+        assert_eq!(g.cycle(), GpuProfile::NvidiaProprietary);
+        assert_eq!(g.cycle().cycle(), GpuProfile::AmdMesa);
+        assert_eq!(g.cycle().cycle().cycle(), GpuProfile::IntelMesa);
+        assert_eq!(g.cycle().cycle().cycle().cycle(), GpuProfile::VirtualMachine);
+        assert_eq!(g.cycle().cycle().cycle().cycle().cycle(), GpuProfile::AutoDetect);
+    }
+
+    #[test]
+    fn test_wallpaper_engine_cycling() {
+        let w = WallpaperEngine::Swww;
+        assert_eq!(w.cycle(), WallpaperEngine::Hyprpaper);
+        assert_eq!(w.cycle().cycle(), WallpaperEngine::Awww);
+        assert_eq!(w.cycle().cycle().cycle(), WallpaperEngine::MpvPaper);
+        assert_eq!(w.cycle().cycle().cycle().cycle(), WallpaperEngine::Swww);
+    }
+
+    #[test]
+    fn test_backup_strategy_cycling() {
+        let b = BackupStrategy::Timestamped;
+        assert_eq!(b.cycle(), BackupStrategy::DirectOverwrite);
+        assert_eq!(b.cycle().cycle(), BackupStrategy::SkipExisting);
+        assert_eq!(b.cycle().cycle().cycle(), BackupStrategy::Timestamped);
+    }
+
+    #[test]
+    fn test_profile_json_roundtrip() {
+        let config = InstallConfig::default();
+        let json = serde_json::to_string_pretty(&config).expect("Serialize to JSON");
+        let restored: InstallConfig = serde_json::from_str(&json).expect("Deserialize from JSON");
+        assert_eq!(config.theme_name, restored.theme_name);
+        assert_eq!(config.gpu_profile, restored.gpu_profile);
+        assert_eq!(config.wallpaper_engine, restored.wallpaper_engine);
+        assert_eq!(config.backup_strategy, restored.backup_strategy);
+    }
 
     #[test]
     fn test_font_choice_cycling() {

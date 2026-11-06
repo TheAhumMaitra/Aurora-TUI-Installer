@@ -142,6 +142,42 @@ pub enum LockscreenArg {
     None,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum GpuArg {
+    #[value(name = "auto")]
+    Auto,
+    #[value(name = "nvidia")]
+    Nvidia,
+    #[value(name = "amd")]
+    Amd,
+    #[value(name = "intel")]
+    Intel,
+    #[value(name = "vm")]
+    VirtualMachine,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum WallpaperArg {
+    #[value(name = "swww")]
+    Swww,
+    #[value(name = "hyprpaper")]
+    Hyprpaper,
+    #[value(name = "awww")]
+    Awww,
+    #[value(name = "mpvpaper")]
+    MpvPaper,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum BackupArg {
+    #[value(name = "timestamp")]
+    Timestamped,
+    #[value(name = "overwrite")]
+    DirectOverwrite,
+    #[value(name = "skip")]
+    SkipExisting,
+}
+
 /// Aurora TUI Installer tailored for Arch Linux and Arch-based distributions
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -215,6 +251,30 @@ pub struct CliArgs {
     /// Choose Wayland lockscreen daemon (hyprlock, swaylock, none)
     #[arg(long, value_enum)]
     pub lockscreen: Option<LockscreenArg>,
+
+    /// Choose GPU driver profile and Wayland acceleration (auto, nvidia, amd, intel, vm)
+    #[arg(long, value_enum)]
+    pub gpu: Option<GpuArg>,
+
+    /// Choose default wallpaper engine daemon (swww, hyprpaper, awww, mpvpaper)
+    #[arg(long, value_enum)]
+    pub wallpaper: Option<WallpaperArg>,
+
+    /// Choose dotfiles backup strategy (timestamp, overwrite, skip)
+    #[arg(long, value_enum)]
+    pub backup: Option<BackupArg>,
+
+    /// Export current installer configuration to a reusable JSON profile file
+    #[arg(long)]
+    pub export_profile: Option<PathBuf>,
+
+    /// Load installer configuration from a JSON profile file
+    #[arg(long, alias = "import-profile")]
+    pub profile: Option<PathBuf>,
+
+    /// Run full hardware and system preflight diagnostics check and exit
+    #[arg(long, default_value_t = false)]
+    pub diagnostics: bool,
 
     /// Comma-separated list of explicit packages to install (e.g. hyprland,waybar,kitty)
     #[arg(long, value_delimiter = ',')]
