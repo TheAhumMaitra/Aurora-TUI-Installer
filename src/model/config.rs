@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -10,6 +11,7 @@ pub enum InstallMode {
     Git,
 }
 
+#[allow(dead_code)]
 impl InstallMode {
     pub fn label(&self) -> &'static str {
         match self {
@@ -44,9 +46,167 @@ impl InstallPreset {
 
     pub fn description(&self) -> &'static str {
         match self {
-            InstallPreset::FullRice => "Installs everything: desktop, SDDM astronaut theme, Waytrogen, LazyVim, tools & fonts",
+            InstallPreset::FullRice => "Installs everything: desktop, SDDM astronaut theme, Waytrogen, Neovim, tools & fonts",
             InstallPreset::MinimalRice => "Installs only core Hyprland, Waybar, basic dotfiles and essential utils",
-            InstallPreset::Custom => "Fine-tune and toggle each individual component to your preference",
+            InstallPreset::Custom => "Fine-tune individual components, package lists, and development presets",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum NeovimPreset {
+    LazyVim,
+    NvChad,
+    AstroNvim,
+    Kickstart,
+    None,
+}
+
+#[allow(dead_code)]
+impl NeovimPreset {
+    pub const ALL: &[NeovimPreset] = &[
+        NeovimPreset::LazyVim,
+        NeovimPreset::NvChad,
+        NeovimPreset::AstroNvim,
+        NeovimPreset::Kickstart,
+        NeovimPreset::None,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            NeovimPreset::LazyVim => "LazyVim Starter (Aurora Official)",
+            NeovimPreset::NvChad => "NvChad (Blazing Fast & Beautiful)",
+            NeovimPreset::AstroNvim => "AstroNvim (Aesthetic Extensible IDE)",
+            NeovimPreset::Kickstart => "Kickstart.nvim (Modular & Minimal)",
+            NeovimPreset::None => "None / Keep Existing Configuration",
+        }
+    }
+
+    pub fn description(&self) -> &'static str {
+        match self {
+            NeovimPreset::LazyVim => "Preconfigured Neovim with Lazy.nvim, LSP, treesitter, fuzzy finder & which-key",
+            NeovimPreset::NvChad => "Blazing fast startup time (<20ms) with rich UI popups and custom statusline",
+            NeovimPreset::AstroNvim => "Feature-rich extensible configuration tailored for modern full-stack development",
+            NeovimPreset::Kickstart => "Single-file modular starting point documented for personal customization",
+            NeovimPreset::None => "Do not touch ~/.config/nvim; preserve current user Neovim setup",
+        }
+    }
+
+    pub fn repo_url(&self) -> Option<&'static str> {
+        match self {
+            NeovimPreset::LazyVim => Some("https://github.com/LazyVim/starter"),
+            NeovimPreset::NvChad => Some("https://github.com/NvChad/starter"),
+            NeovimPreset::AstroNvim => Some("https://github.com/AstroNvim/template"),
+            NeovimPreset::Kickstart => Some("https://github.com/nvim-lua/kickstart.nvim"),
+            NeovimPreset::None => None,
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            NeovimPreset::LazyVim => NeovimPreset::NvChad,
+            NeovimPreset::NvChad => NeovimPreset::AstroNvim,
+            NeovimPreset::AstroNvim => NeovimPreset::Kickstart,
+            NeovimPreset::Kickstart => NeovimPreset::None,
+            NeovimPreset::None => NeovimPreset::LazyVim,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TerminalChoice {
+    Kitty,
+    Ghostty,
+    Alacritty,
+    Foot,
+}
+
+#[allow(dead_code)]
+impl TerminalChoice {
+    pub const ALL: &[TerminalChoice] = &[
+        TerminalChoice::Kitty,
+        TerminalChoice::Ghostty,
+        TerminalChoice::Alacritty,
+        TerminalChoice::Foot,
+    ];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            TerminalChoice::Kitty => "Kitty (Aurora Default)",
+            TerminalChoice::Ghostty => "Ghostty (GPU Accelerated)",
+            TerminalChoice::Alacritty => "Alacritty (Simplicity & Speed)",
+            TerminalChoice::Foot => "Foot (Lightweight Wayland Native)",
+        }
+    }
+
+    pub fn package_name(&self) -> &'static str {
+        match self {
+            TerminalChoice::Kitty => "kitty",
+            TerminalChoice::Ghostty => "ghostty",
+            TerminalChoice::Alacritty => "alacritty",
+            TerminalChoice::Foot => "foot",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            TerminalChoice::Kitty => TerminalChoice::Ghostty,
+            TerminalChoice::Ghostty => TerminalChoice::Alacritty,
+            TerminalChoice::Alacritty => TerminalChoice::Foot,
+            TerminalChoice::Foot => TerminalChoice::Kitty,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ShellChoice {
+    Fish,
+    Zsh,
+    Bash,
+}
+
+#[allow(dead_code)]
+impl ShellChoice {
+    pub const ALL: &[ShellChoice] = &[ShellChoice::Fish, ShellChoice::Zsh, ShellChoice::Bash];
+
+    pub fn label(&self) -> &'static str {
+        match self {
+            ShellChoice::Fish => "Fish (Smart Autosuggestions)",
+            ShellChoice::Zsh => "Zsh + Starship Prompt",
+            ShellChoice::Bash => "Bash + Starship Prompt",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            ShellChoice::Fish => ShellChoice::Zsh,
+            ShellChoice::Zsh => ShellChoice::Bash,
+            ShellChoice::Bash => ShellChoice::Fish,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AnimationProfile {
+    Snappy,
+    Smooth,
+    Minimal,
+}
+
+impl AnimationProfile {
+    pub fn label(&self) -> &'static str {
+        match self {
+            AnimationProfile::Snappy => "Snappy (0.15s - Instant Response)",
+            AnimationProfile::Smooth => "Smooth (0.3s - Elegant Curves)",
+            AnimationProfile::Minimal => "Minimal (Reduced Motion)",
+        }
+    }
+
+    pub fn cycle(&self) -> Self {
+        match self {
+            AnimationProfile::Snappy => AnimationProfile::Smooth,
+            AnimationProfile::Smooth => AnimationProfile::Minimal,
+            AnimationProfile::Minimal => AnimationProfile::Snappy,
         }
     }
 }
@@ -62,6 +222,7 @@ pub enum Component {
     Dotfiles,
     ShellConfig,
     SudoRs,
+    GamingSuite,
 }
 
 impl Component {
@@ -75,6 +236,7 @@ impl Component {
         Component::Dotfiles,
         Component::ShellConfig,
         Component::SudoRs,
+        Component::GamingSuite,
     ];
 
     pub fn label(&self) -> &'static str {
@@ -84,10 +246,11 @@ impl Component {
             Component::SddmTheme => "SDDM Astronaut Theme & Font Setup",
             Component::RustScripts => "Aurora Hyprland Rust Scripts & Tools (aurora CLI)",
             Component::Waytrogen => "Waytrogen-Aurora Wallpaper Switcher",
-            Component::LazyVim => "LazyVim Modern Neovim Starter",
+            Component::LazyVim => "Neovim IDE Configuration Setup",
             Component::Dotfiles => "Aurora Dotfiles (~/.config, preserves User customization)",
-            Component::ShellConfig => "Shell PATH & Fish Configuration (~/.cargo/bin, ~/.local/bin)",
+            Component::ShellConfig => "Shell PATH & Default Shell Configuration",
             Component::SudoRs => "Switch sudo to sudo-rs (Memory-safe Rust implementation)",
+            Component::GamingSuite => "Gaming & Performance Suite (Steam, GameMode, MangoHud)",
         }
     }
 
@@ -98,10 +261,11 @@ impl Component {
             Component::SddmTheme => "Installs SDDM login manager astronaut theme with elegant animations and fonts",
             Component::RustScripts => "Compiles and installs Aurora's high-performance Rust helper scripts into ~/.cargo/bin",
             Component::Waytrogen => "Integrates the fast GTK/Rust wallpaper daemon and management tool for Wayland",
-            Component::LazyVim => "Backs up Neovim configs and deploys the preconfigured LazyVim IDE setup",
+            Component::LazyVim => "Deploys selected Neovim IDE preset (LazyVim, NvChad, AstroNvim, Kickstart)",
             Component::Dotfiles => "Safely deploys Waybar, Hyprland, Kitty, Ghostty, and SwayNC configs with timestamped backups",
-            Component::ShellConfig => "Configures environment variables, adds ~/.cargo/bin and ~/.local/bin to PATH across shells",
+            Component::ShellConfig => "Configures environment variables, default shell, and adds ~/.cargo/bin and ~/.local/bin to PATH",
             Component::SudoRs => "Optionally symlinks /usr/bin/sudo to /usr/bin/sudo-rs for modern Rust memory safety",
+            Component::GamingSuite => "Installs Steam, GameMode optimizer daemon, MangoHud FPS overlay, and gaming tweaks",
         }
     }
 }
@@ -111,11 +275,16 @@ pub struct InstallConfig {
     pub mode: InstallMode,
     pub preset: InstallPreset,
     pub selected_components: Vec<Component>,
+    pub neovim_preset: NeovimPreset,
+    pub terminal_choice: TerminalChoice,
+    pub shell_choice: ShellChoice,
+    pub animation_profile: AnimationProfile,
     pub theme_name: String,
     pub dry_run: bool,
     pub backup_dir: PathBuf,
     pub source_dir: PathBuf,
     pub allow_sudo_rs: bool,
+    pub disabled_packages: HashSet<String>,
 }
 
 impl Default for InstallConfig {
@@ -124,7 +293,7 @@ impl Default for InstallConfig {
         let home = dirs_home().unwrap_or_else(|| PathBuf::from("/tmp"));
         let backup_dir = home.join(format!(".config/aurora_backup_{}", timestamp));
 
-        // Default components for FullRice
+        // Default components for FullRice (GamingSuite optional by default)
         let selected_components = vec![
             Component::SystemPackages,
             Component::ExtraRepositories,
@@ -141,11 +310,16 @@ impl Default for InstallConfig {
             mode: InstallMode::Stable,
             preset: InstallPreset::FullRice,
             selected_components,
+            neovim_preset: NeovimPreset::LazyVim,
+            terminal_choice: TerminalChoice::Kitty,
+            shell_choice: ShellChoice::Fish,
+            animation_profile: AnimationProfile::Snappy,
             theme_name: "Aurora Default".to_string(),
             dry_run: false,
             backup_dir,
             source_dir: PathBuf::new(),
             allow_sudo_rs: true,
+            disabled_packages: HashSet::new(),
         }
     }
 }
@@ -168,7 +342,18 @@ impl InstallConfig {
         self.preset = preset;
         match preset {
             InstallPreset::FullRice => {
-                self.selected_components = Component::ALL.to_vec();
+                self.selected_components = vec![
+                    Component::SystemPackages,
+                    Component::ExtraRepositories,
+                    Component::SddmTheme,
+                    Component::RustScripts,
+                    Component::Waytrogen,
+                    Component::LazyVim,
+                    Component::Dotfiles,
+                    Component::ShellConfig,
+                    Component::SudoRs,
+                ];
+                self.disabled_packages.clear();
             }
             InstallPreset::MinimalRice => {
                 self.selected_components = vec![
@@ -177,9 +362,37 @@ impl InstallConfig {
                     Component::RustScripts,
                     Component::ShellConfig,
                 ];
+                self.neovim_preset = NeovimPreset::None;
+                self.disabled_packages.clear();
             }
             InstallPreset::Custom => {}
         }
+    }
+
+    pub fn is_package_enabled(&self, package_name: &str) -> bool {
+        !self.disabled_packages.contains(package_name)
+    }
+
+    pub fn toggle_package(&mut self, package_name: &str) {
+        if self.disabled_packages.contains(package_name) {
+            self.disabled_packages.remove(package_name);
+        } else {
+            self.disabled_packages.insert(package_name.to_string());
+        }
+        self.preset = InstallPreset::Custom;
+    }
+
+    pub fn enable_all_packages<'a>(&mut self, pkgs: impl IntoIterator<Item = &'a str>) {
+        for pkg in pkgs {
+            self.disabled_packages.remove(pkg);
+        }
+    }
+
+    pub fn disable_all_packages<'a>(&mut self, pkgs: impl IntoIterator<Item = &'a str>) {
+        for pkg in pkgs {
+            self.disabled_packages.insert(pkg.to_string());
+        }
+        self.preset = InstallPreset::Custom;
     }
 }
 

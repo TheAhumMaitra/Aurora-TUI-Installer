@@ -8,14 +8,17 @@ mod model;
 mod ui;
 
 use clap::Parser;
-use cli::{CliArgs, DistroArg, ModeArg, PresetArg};
+use cli::{CliArgs, DistroArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use distro::{DistroFamily, DistroInfo};
-use model::config::{Component, InstallConfig, InstallMode, InstallPreset};
+use model::config::{
+    Component, InstallConfig, InstallMode, InstallPreset, NeovimPreset, ShellChoice,
+    TerminalChoice,
+};
 use model::state::{AppScreen, AppState, ConfigSection};
 use model::theme::AVAILABLE_THEMES;
 use ratatui::backend::CrosstermBackend;
@@ -50,6 +53,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             PresetArg::Full => config.apply_preset(InstallPreset::FullRice),
             PresetArg::Minimal => config.apply_preset(InstallPreset::MinimalRice),
         }
+    }
+    if let Some(neovim) = args.neovim {
+        config.neovim_preset = match neovim {
+            NeovimArg::LazyVim => NeovimPreset::LazyVim,
+            NeovimArg::NvChad => NeovimPreset::NvChad,
+            NeovimArg::AstroNvim => NeovimPreset::AstroNvim,
+            NeovimArg::Kickstart => NeovimPreset::Kickstart,
+            NeovimArg::None => NeovimPreset::None,
+        };
+    }
+    if let Some(term) = args.terminal {
+        config.terminal_choice = match term {
+            TerminalArg::Kitty => TerminalChoice::Kitty,
+            TerminalArg::Ghostty => TerminalChoice::Ghostty,
+            TerminalArg::Alacritty => TerminalChoice::Alacritty,
+            TerminalArg::Foot => TerminalChoice::Foot,
+        };
+    }
+    if let Some(sh) = args.shell {
+        config.shell_choice = match sh {
+            ShellArg::Fish => ShellChoice::Fish,
+            ShellArg::Zsh => ShellChoice::Zsh,
+            ShellArg::Bash => ShellChoice::Bash,
+        };
+    }
+    if args.gaming && !config.selected_components.contains(&Component::GamingSuite) {
+        config.selected_components.push(Component::GamingSuite);
     }
     if let Some(theme) = args.theme {
         config.theme_name = theme;
@@ -101,6 +131,9 @@ fn run_headless(state: &mut AppState) {
     println!("=== Aurora Non-Interactive Installation ===");
     println!("Target Distribution: {}", state.selected_distro.name());
     println!("Installation Mode:   {:?}", state.config.mode);
+    println!("Neovim Preset:       {}", state.config.neovim_preset.label());
+    println!("Terminal Choice:     {}", state.config.terminal_choice.label());
+    println!("Shell Choice:        {}", state.config.shell_choice.label());
     println!("Theme:               {}", state.config.theme_name);
     println!("Dry Run:             {}", state.config.dry_run);
     println!("===========================================");
@@ -155,7 +188,9 @@ fn run_tui_loop(
 
 fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers) {
     // Global exit shortcut
-    if modifiers.contains(KeyModifiers::CONTROL) && (code == KeyCode::Char('c') || code == KeyCode::Char('C')) {
+    if modifiers.contains(KeyModifiers::CONTROL)
+        && (code == KeyCode::Char('c') || code == KeyCode::Char('C'))
+    {
         state.should_exit = true;
         return;
     }
@@ -178,7 +213,9 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             KeyCode::Tab => {
                 state.active_config_section = match state.active_config_section {
                     ConfigSection::Preset => ConfigSection::Mode,
-                    ConfigSection::Mode => ConfigSection::Theme,
+                    ConfigSection::Mode => ConfigSection::Neovim,
+                    ConfigSection::Neovim => ConfigSection::Terminal,
+                    ConfigSection::Terminal => ConfigSection::Theme,
                     ConfigSection::Theme => ConfigSection::DryRun,
                     ConfigSection::DryRun => ConfigSection::Components,
                     ConfigSection::Components => ConfigSection::Preset,
@@ -188,10 +225,39 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.active_config_section = match state.active_config_section {
                     ConfigSection::Preset => ConfigSection::Components,
                     ConfigSection::Mode => ConfigSection::Preset,
-                    ConfigSection::Theme => ConfigSection::Mode,
+                    ConfigSection::Neovim => ConfigSection::Mode,
+                    ConfigSection::Terminal => ConfigSection::Neovim,
+                    ConfigSection::Theme => ConfigSection::Terminal,
                     ConfigSection::DryRun => ConfigSection::Theme,
                     ConfigSection::Components => ConfigSection::DryRun,
                 };
+            }
+            // Extraordinary shortcuts!
+            KeyCode::Char('k') | KeyCode::Char('K') => {
+                state.package_category_cursor = 0;
+                state.package_item_cursor = 0;
+                state.package_side_packages = false;
+                state.current_screen = AppScreen::PackageSelection;
+            }
+            KeyCode::Char('v') | KeyCode::Char('V') => {
+                state.config.neovim_preset = state.config.neovim_preset.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                state.config.terminal_choice = state.config.terminal_choice.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('h') | KeyCode::Char('H') => {
+                state.config.shell_choice = state.config.shell_choice.cycle();
+                state.refresh_steps();
+            }
+            KeyCode::Char('g') | KeyCode::Char('G') => {
+                state.config.toggle_component(Component::GamingSuite);
+                state.refresh_steps();
+            }
+            KeyCode::Char('o') | KeyCode::Char('O') => {
+                state.config.animation_profile = state.config.animation_profile.cycle();
+                state.refresh_steps();
             }
             KeyCode::Char('p') | KeyCode::Char('P') => {
                 let next = match state.config.preset {
@@ -222,7 +288,8 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 }
                 ConfigSection::Theme => {
                     state.theme_cursor = state.theme_cursor.saturating_sub(1);
-                    state.config.theme_name = AVAILABLE_THEMES[state.theme_cursor].name.to_string();
+                    state.config.theme_name =
+                        AVAILABLE_THEMES[state.theme_cursor].name.to_string();
                     state.refresh_steps();
                 }
                 _ => {}
@@ -236,7 +303,8 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 ConfigSection::Theme => {
                     if state.theme_cursor + 1 < AVAILABLE_THEMES.len() {
                         state.theme_cursor += 1;
-                        state.config.theme_name = AVAILABLE_THEMES[state.theme_cursor].name.to_string();
+                        state.config.theme_name =
+                            AVAILABLE_THEMES[state.theme_cursor].name.to_string();
                         state.refresh_steps();
                     }
                 }
@@ -267,8 +335,17 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                     };
                     state.refresh_steps();
                 }
+                ConfigSection::Neovim => {
+                    state.config.neovim_preset = state.config.neovim_preset.cycle();
+                    state.refresh_steps();
+                }
+                ConfigSection::Terminal => {
+                    state.config.terminal_choice = state.config.terminal_choice.cycle();
+                    state.refresh_steps();
+                }
                 ConfigSection::Theme => {
-                    state.config.theme_name = AVAILABLE_THEMES[state.theme_cursor].name.to_string();
+                    state.config.theme_name =
+                        AVAILABLE_THEMES[state.theme_cursor].name.to_string();
                     state.refresh_steps();
                 }
             },
@@ -281,6 +358,79 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
             }
             _ => {}
         },
+
+        AppScreen::PackageSelection => {
+            let groups: &[distro::DistroPackageGroup] = match state.selected_distro {
+                DistroFamily::Arch => distro::arch::ARCH_PACKAGE_GROUPS,
+                DistroFamily::Fedora => distro::fedora::FEDORA_PACKAGE_GROUPS,
+                DistroFamily::NixOS => distro::nixos::NIXOS_PACKAGE_GROUPS,
+                DistroFamily::Unknown => &[],
+            };
+            let total_cats = groups.len();
+
+            match code {
+                KeyCode::Tab | KeyCode::Left | KeyCode::Right => {
+                    state.package_side_packages = !state.package_side_packages;
+                }
+                KeyCode::Up => {
+                    if !state.package_side_packages {
+                        state.package_category_cursor =
+                            state.package_category_cursor.saturating_sub(1);
+                        state.package_item_cursor = 0;
+                    } else {
+                        state.package_item_cursor =
+                            state.package_item_cursor.saturating_sub(1);
+                    }
+                }
+                KeyCode::Down => {
+                    if !state.package_side_packages {
+                        if state.package_category_cursor + 1 < total_cats {
+                            state.package_category_cursor += 1;
+                            state.package_item_cursor = 0;
+                        }
+                    } else if let Some(group) = groups.get(state.package_category_cursor) {
+                        if state.package_item_cursor + 1 < group.packages.len() {
+                            state.package_item_cursor += 1;
+                        }
+                    }
+                }
+                KeyCode::Char(' ') => {
+                    if !state.package_side_packages {
+                        state.package_side_packages = true;
+                    } else if let Some(group) = groups.get(state.package_category_cursor) {
+                        if let Some(&pkg) = group.packages.get(state.package_item_cursor) {
+                            state.config.toggle_package(pkg);
+                        }
+                    }
+                }
+                KeyCode::Char('a') | KeyCode::Char('A') => {
+                    if let Some(group) = groups.get(state.package_category_cursor) {
+                        state
+                            .config
+                            .enable_all_packages(group.packages.iter().copied());
+                    }
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') => {
+                    if let Some(group) = groups.get(state.package_category_cursor) {
+                        state
+                            .config
+                            .disable_all_packages(group.packages.iter().copied());
+                    }
+                }
+                KeyCode::Char('i') | KeyCode::Char('I') => {
+                    if let Some(group) = groups.get(state.package_category_cursor) {
+                        for &pkg in group.packages {
+                            state.config.toggle_package(pkg);
+                        }
+                    }
+                }
+                KeyCode::Enter | KeyCode::Esc | KeyCode::Char('b') | KeyCode::Char('B') => {
+                    state.refresh_steps();
+                    state.current_screen = AppScreen::Configuration;
+                }
+                _ => {}
+            }
+        }
 
         AppScreen::Summary => match code {
             KeyCode::Enter | KeyCode::Char('y') | KeyCode::Char('Y') => {
@@ -304,7 +454,8 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
                 state.log_scroll = state.log_scroll.saturating_sub(2);
             }
             KeyCode::Down | KeyCode::PageDown => {
-                state.log_scroll = (state.log_scroll + 2).min(state.logs.len().saturating_sub(1));
+                state.log_scroll =
+                    (state.log_scroll + 2).min(state.logs.len().saturating_sub(1));
             }
             _ => {}
         },

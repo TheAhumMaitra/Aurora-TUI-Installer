@@ -4,5 +4,6 @@
 pub mod complete;
 pub mod configuration;
 pub mod execution;
+pub mod packages;
 pub mod summary;
 pub mod welcome;

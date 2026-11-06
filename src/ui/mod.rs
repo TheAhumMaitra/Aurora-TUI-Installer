@@ -29,6 +29,7 @@ pub fn render_app(f: &mut Frame, state: &AppState) {
     match state.current_screen {
         AppScreen::Welcome => screens::welcome::render(f, state, chunks[1]),
         AppScreen::Configuration => screens::configuration::render(f, state, chunks[1]),
+        AppScreen::PackageSelection => screens::packages::render(f, state, chunks[1]),
         AppScreen::Summary => screens::summary::render(f, state, chunks[1]),
         AppScreen::Execution => screens::execution::render(f, state, chunks[1]),
         AppScreen::Complete => screens::complete::render(f, state, chunks[1]),
@@ -51,7 +52,8 @@ fn render_header(f: &mut Frame, state: &AppState, area: Rect) {
     tab_spans.push(Span::styled("│ ", Style::default().fg(COLOR_DARK)));
 
     for (i, screen) in screens.iter().enumerate() {
-        let is_active = *screen == state.current_screen;
+        let is_active = *screen == state.current_screen
+            || (*screen == AppScreen::Configuration && state.current_screen == AppScreen::PackageSelection);
         let is_done = screen.index() < state.current_screen.index();
 
         let (style, prefix) = if is_active {
@@ -74,7 +76,13 @@ fn render_header(f: &mut Frame, state: &AppState, area: Rect) {
             )
         };
 
-        tab_spans.push(Span::styled(format!(" {}{} ", prefix, screen.title()), style));
+        let screen_title = if is_active && state.current_screen == AppScreen::PackageSelection {
+            "2. Packages Customizer"
+        } else {
+            screen.title()
+        };
+
+        tab_spans.push(Span::styled(format!(" {}{} ", prefix, screen_title), style));
 
         if i < screens.len() - 1 {
             tab_spans.push(Span::styled(" ─► ", Style::default().fg(COLOR_DARK)));
@@ -100,13 +108,23 @@ fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
             ("Q", "Quit"),
         ],
         AppScreen::Configuration => vec![
+            ("K", "Fine-tune Packages"),
+            ("V", "Neovim Preset"),
+            ("T", "Terminal"),
+            ("G", "Gaming Suite"),
+            ("H", "Shell"),
+            ("P", "Preset"),
             ("Tab", "Switch Section"),
-            ("↑/↓", "Navigate"),
-            ("Space", "Toggle / Select"),
-            ("P", "Cycle Preset"),
-            ("M", "Cycle Mode"),
-            ("Enter", "Review Pipeline"),
+            ("Enter", "Review"),
             ("Esc", "Back"),
+        ],
+        AppScreen::PackageSelection => vec![
+            ("Space", "Toggle Package"),
+            ("A", "Select All"),
+            ("N", "Deselect All"),
+            ("I", "Invert"),
+            ("Tab / ←/→", "Switch Column"),
+            ("Enter / Esc", "Save & Return"),
         ],
         AppScreen::Summary => vec![
             ("Enter / Y", "Start Installation"),

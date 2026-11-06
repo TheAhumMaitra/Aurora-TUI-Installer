@@ -292,6 +292,14 @@ fn execute_single_step(
             pkgs.extend_from_slice(arch::PACMAN_UTILS);
             pkgs.extend_from_slice(arch::PACMAN_BUILD);
 
+            let term_pkg = config.terminal_choice.package_name();
+            if !pkgs.contains(&term_pkg) {
+                pkgs.push(term_pkg);
+            }
+
+            // Filter out packages disabled by the user
+            pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+
             let mut args = vec!["pacman", "-S", "--needed", "--noconfirm"];
             args.extend(pkgs);
             runner.run_command("sudo", &args)
@@ -304,10 +312,22 @@ fn execute_single_step(
                 let _ = runner.run_command("sh", &["-c", "cd /tmp/yay-install && makepkg -si --noconfirm"]);
             }
             runner.log_info("Installing AUR extras...");
+            let mut aur_pkgs: Vec<&str> = arch::YAY_AUR_PACKAGES.to_vec();
+            aur_pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+
             let mut args = vec!["-S", "--needed", "--noconfirm"];
-            args.extend_from_slice(arch::YAY_AUR_PACKAGES);
+            args.extend(aur_pkgs);
             runner.run_command("yay", &args).or_else(|_| {
                 runner.log_warn("Some AUR packages may not have built or are already present");
+                Ok(())
+            })
+        }
+        "arch_gaming" => {
+            runner.log_info("Installing Steam, GameMode, and MangoHud gaming packages...");
+            let mut args = vec!["pacman", "-S", "--needed", "--noconfirm"];
+            args.extend_from_slice(arch::ARCH_GAMING_PACKAGES);
+            runner.run_command("sudo", &args).or_else(|_| {
+                runner.log_warn("Some gaming packages could not be installed (ensure multilib is enabled in /etc/pacman.conf)");
                 Ok(())
             })
         }
@@ -345,7 +365,7 @@ fn execute_single_step(
             runner.run_command("sh", &["-c", "cd /tmp/waytrogen-aurora && cargo build --release && cp target/release/waytrogen $HOME/.local/bin/"]).or_else(|_| Ok(()))
         }
         "arch_lazyvim" => {
-            deploy_lazyvim(config, runner)
+            deploy_neovim_preset(config, runner)
         }
         "arch_dotfiles" => {
             deploy_dotfiles(config, runner)
@@ -382,6 +402,13 @@ fn execute_single_step(
             pkgs.extend_from_slice(fedora::DNF_UTILS);
             pkgs.extend_from_slice(fedora::DNF_BUILD);
 
+            let term_pkg = config.terminal_choice.package_name();
+            if !pkgs.contains(&term_pkg) {
+                pkgs.push(term_pkg);
+            }
+
+            pkgs.retain(|&pkg| config.is_package_enabled(pkg));
+
             let mut args = vec!["dnf", "install", "-y"];
             args.extend(pkgs);
             runner.run_command("sudo", &args)
@@ -391,6 +418,12 @@ fn execute_single_step(
             let _ = runner.run_command("git", &["clone", "https://github.com/alvatip/Nordzy-cursors.git", "/tmp/nordzy-cursors"]);
             let _ = runner.run_command("sh", &["-c", "cd /tmp/nordzy-cursors && ./install.sh -p"]);
             Ok(())
+        }
+        "fedora_gaming" => {
+            runner.log_info("Installing Steam, GameMode, and MangoHud on Fedora...");
+            let mut args = vec!["dnf", "install", "-y"];
+            args.extend_from_slice(fedora::FEDORA_GAMING_PACKAGES);
+            runner.run_command("sudo", &args).or_else(|_| Ok(()))
         }
         "fedora_sddm" => {
             runner.log_info("Configuring SDDM Astronaut Theme for Fedora...");
@@ -428,7 +461,7 @@ fn execute_single_step(
             Ok(())
         }
         "fedora_lazyvim" => {
-            deploy_lazyvim(config, runner)
+            deploy_neovim_preset(config, runner)
         }
         "fedora_dotfiles" => {
             deploy_dotfiles(config, runner)
@@ -498,8 +531,12 @@ fn execute_single_step(
             let _ = runner.run_command("flatpak", &["install", "-y", "flathub", "app.zen_browser.zen"]);
             Ok(())
         }
+        "nixos_gaming" => {
+            runner.log_info("Configuring Gaming options for NixOS...");
+            Ok(())
+        }
         "nixos_lazyvim" => {
-            deploy_lazyvim(config, runner)
+            deploy_neovim_preset(config, runner)
         }
         "nixos_shell" => {
             configure_shell_env(runner)
@@ -515,8 +552,18 @@ fn execute_single_step(
     }
 }
 
-fn deploy_lazyvim(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
-    runner.log_info("Deploying LazyVim starter...");
+fn deploy_neovim_preset(config: &InstallConfig, runner: &StepRunner) -> Result<(), String> {
+    if config.neovim_preset == crate::model::config::NeovimPreset::None {
+        runner.log_info("Skipping Neovim setup (None / Preserve Selected)");
+        return Ok(());
+    }
+
+    let repo = match config.neovim_preset.repo_url() {
+        Some(url) => url,
+        None => return Ok(()),
+    };
+
+    runner.log_info(format!("Deploying {} from {}...", config.neovim_preset.label(), repo));
     if let Some(home) = dirs_home() {
         let nvim_dir = home.join(".config/nvim");
         if nvim_dir.exists() {
@@ -527,11 +574,12 @@ fn deploy_lazyvim(config: &InstallConfig, runner: &StepRunner) -> Result<(), Str
                 let _ = fs::rename(&nvim_dir, &backup_nvim);
             }
         }
-        runner.run_command("git", &["clone", "https://github.com/LazyVim/starter", nvim_dir.to_str().unwrap_or("")])?;
+        runner.run_command("git", &["clone", repo, nvim_dir.to_str().unwrap_or("")])?;
         if !runner.dry_run {
             let _ = fs::remove_dir_all(nvim_dir.join(".git"));
         }
     }
+    runner.log_success(format!("{} deployed successfully", config.neovim_preset.label()));
     Ok(())
 }
 

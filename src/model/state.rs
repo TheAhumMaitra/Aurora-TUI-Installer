@@ -11,6 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 pub enum AppScreen {
     Welcome,
     Configuration,
+    PackageSelection,
     Summary,
     Execution,
     Complete,
@@ -21,9 +22,10 @@ impl AppScreen {
         match self {
             AppScreen::Welcome => 0,
             AppScreen::Configuration => 1,
-            AppScreen::Summary => 2,
-            AppScreen::Execution => 3,
-            AppScreen::Complete => 4,
+            AppScreen::PackageSelection => 2,
+            AppScreen::Summary => 3,
+            AppScreen::Execution => 4,
+            AppScreen::Complete => 5,
         }
     }
 
@@ -31,6 +33,7 @@ impl AppScreen {
         match self {
             AppScreen::Welcome => "1. Welcome & Distro",
             AppScreen::Configuration => "2. Configuration",
+            AppScreen::PackageSelection => "2b. Packages",
             AppScreen::Summary => "3. Review",
             AppScreen::Execution => "4. Installation",
             AppScreen::Complete => "5. Finished",
@@ -42,6 +45,8 @@ impl AppScreen {
 pub enum ConfigSection {
     Preset,
     Mode,
+    Neovim,
+    Terminal,
     Components,
     Theme,
     DryRun,
@@ -61,6 +66,9 @@ pub struct AppState {
     pub active_config_section: ConfigSection,
     pub component_cursor: usize,
     pub theme_cursor: usize,
+    pub package_category_cursor: usize,
+    pub package_item_cursor: usize,
+    pub package_side_packages: bool,
     pub is_installing: bool,
     pub install_finished: bool,
     pub install_success: bool,
@@ -90,6 +98,9 @@ impl AppState {
             active_config_section: ConfigSection::Preset,
             component_cursor: 0,
             theme_cursor: 0,
+            package_category_cursor: 0,
+            package_item_cursor: 0,
+            package_side_packages: false,
             is_installing: false,
             install_finished: false,
             install_success: false,

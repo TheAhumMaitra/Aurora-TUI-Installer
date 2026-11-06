@@ -30,6 +30,42 @@ pub enum PresetArg {
     Minimal,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum NeovimArg {
+    #[value(name = "lazyvim")]
+    LazyVim,
+    #[value(name = "nvchad")]
+    NvChad,
+    #[value(name = "astronvim")]
+    AstroNvim,
+    #[value(name = "kickstart")]
+    Kickstart,
+    #[value(name = "none")]
+    None,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum TerminalArg {
+    #[value(name = "kitty")]
+    Kitty,
+    #[value(name = "ghostty")]
+    Ghostty,
+    #[value(name = "alacritty")]
+    Alacritty,
+    #[value(name = "foot")]
+    Foot,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum ShellArg {
+    #[value(name = "fish")]
+    Fish,
+    #[value(name = "zsh")]
+    Zsh,
+    #[value(name = "bash")]
+    Bash,
+}
+
 /// Aurora Universal TUI Installer for Arch Linux, Fedora, and NixOS
 #[derive(Parser, Debug, Clone)]
 #[command(
@@ -61,6 +97,22 @@ pub struct CliArgs {
     /// Choose component preset (full rice or minimal desktop)
     #[arg(short, long, value_enum)]
     pub preset: Option<PresetArg>,
+
+    /// Choose the default Neovim distribution preset (lazyvim, nvchad, astronvim, kickstart, none)
+    #[arg(long, value_enum)]
+    pub neovim: Option<NeovimArg>,
+
+    /// Choose preferred terminal emulator (kitty, ghostty, alacritty, foot)
+    #[arg(long, value_enum)]
+    pub terminal: Option<TerminalArg>,
+
+    /// Choose preferred default login shell (fish, zsh, bash)
+    #[arg(long, value_enum)]
+    pub shell: Option<ShellArg>,
+
+    /// Enable gaming and performance suite (Steam, GameMode, MangoHud)
+    #[arg(long, default_value_t = false)]
+    pub gaming: bool,
 
     /// Choose the default Aurora theme to apply
     #[arg(short, long)]

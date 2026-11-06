@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
-use crate::model::config::{Component, InstallConfig};
+use crate::model::config::{Component, InstallConfig, NeovimPreset};
 
 pub const FEDORA_COPR_REPOS: &[&str] = &[
     "solopasha/hyprland",
@@ -38,6 +39,7 @@ pub const DNF_UI: &[&str] = &[
 
 pub const DNF_UTILS: &[&str] = &[
     "kitty",
+    "ghostty",
     "cliphist",
     "nemo",
     "wl-clipboard",
@@ -77,6 +79,57 @@ pub const DNF_BUILD: &[&str] = &[
     "cargo",
 ];
 
+pub const FEDORA_SOURCE_TOOLS: &[&str] = &[
+    "Nordzy-cursors",
+    "rofi-emoji",
+    "snappy-switcher",
+    "hyprwave",
+];
+
+pub const FEDORA_GAMING_PACKAGES: &[&str] = &[
+    "steam",
+    "gamemode",
+    "mangohud",
+];
+
+pub const FEDORA_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
+    DistroPackageGroup {
+        category: "Core Compositor",
+        description: "Hyprland compositor, XDG portals, pipewire audio and session manager",
+        packages: DNF_CORE,
+    },
+    DistroPackageGroup {
+        category: "Daemons & Lockscreen",
+        description: "Notification center (SwayNC), idle daemon, lockscreen, polkit agent",
+        packages: DNF_DAEMONS,
+    },
+    DistroPackageGroup {
+        category: "Bar & UI Components",
+        description: "Waybar status bar, Rofi launcher, GTK3/4 themes, Qt6 wayland libraries",
+        packages: DNF_UI,
+    },
+    DistroPackageGroup {
+        category: "Utilities & Terminal",
+        description: "Kitty, Ghostty, Cliphist, Nemo, Hyprshot, Starship, Mise, fonts",
+        packages: DNF_UTILS,
+    },
+    DistroPackageGroup {
+        category: "Build Tools & Compilers",
+        description: "Base development tools, GCC, Clang, CMake, Rust, Cargo",
+        packages: DNF_BUILD,
+    },
+    DistroPackageGroup {
+        category: "Desktop Addons (Source)",
+        description: "Nordzy cursors, rofi-emoji, snappy-switcher, hyprwave",
+        packages: FEDORA_SOURCE_TOOLS,
+    },
+    DistroPackageGroup {
+        category: "Gaming & Performance Suite",
+        description: "Steam client, GameMode optimization daemon, MangoHud FPS overlay",
+        packages: FEDORA_GAMING_PACKAGES,
+    },
+];
+
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
 
@@ -114,7 +167,16 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 5. SDDM Astronaut Theme
+    // 5. Gaming Suite
+    if config.is_component_selected(Component::GamingSuite) {
+        steps.push(InstallStep::new(
+            "fedora_gaming",
+            "Install Gaming & Performance Suite",
+            "Install Steam, GameMode optimizer daemon, and MangoHud overlay",
+        ));
+    }
+
+    // 6. SDDM Astronaut Theme
     if config.is_component_selected(Component::SddmTheme) {
         steps.push(InstallStep::new(
             "fedora_sddm",
@@ -123,7 +185,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 6. Rust scripts
+    // 7. Rust scripts
     if config.is_component_selected(Component::RustScripts) {
         steps.push(InstallStep::new(
             "fedora_rust_scripts",
@@ -132,7 +194,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 7. Waytrogen
+    // 8. Waytrogen
     if config.is_component_selected(Component::Waytrogen) {
         steps.push(InstallStep::new(
             "fedora_waytrogen",
@@ -141,34 +203,34 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 8. LazyVim
-    if config.is_component_selected(Component::LazyVim) {
+    // 9. Neovim Setup
+    if config.is_component_selected(Component::LazyVim) && config.neovim_preset != NeovimPreset::None {
         steps.push(InstallStep::new(
             "fedora_lazyvim",
-            "Deploy LazyVim Neovim Configuration",
-            "Backup existing Neovim configs and deploy modern LazyVim starter setup",
+            format!("Deploy {} Setup", config.neovim_preset.label()),
+            format!("Backup existing Neovim configs and deploy {}", config.neovim_preset.description()),
         ));
     }
 
-    // 9. Dotfiles
+    // 10. Dotfiles
     if config.is_component_selected(Component::Dotfiles) {
         steps.push(InstallStep::new(
             "fedora_dotfiles",
             "Deploy Aurora Hyprland Dotfiles",
-            "Backup current configurations and deploy Hyprland, Waybar, SwayNC, Kitty configs",
+            format!("Deploy Hyprland (Animation: {}), Waybar, SwayNC, Kitty configs", config.animation_profile.label()),
         ));
     }
 
-    // 10. Shell config
+    // 11. Shell config
     if config.is_component_selected(Component::ShellConfig) {
         steps.push(InstallStep::new(
             "fedora_shell",
-            "Configure Fish Shell & PATH Environment",
-            "Configure default shell to Fish and ensure ~/.cargo/bin and ~/.local/bin are in PATH",
+            format!("Configure Shell ({}) & PATH Environment", config.shell_choice.label()),
+            "Configure chosen shell and ensure ~/.cargo/bin and ~/.local/bin are in PATH",
         ));
     }
 
-    // 11. Sudo-rs
+    // 12. Sudo-rs
     if config.is_component_selected(Component::SudoRs) && config.allow_sudo_rs {
         steps.push(InstallStep::new(
             "fedora_sudo_rs",
@@ -177,7 +239,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 12. Final theme & polish
+    // 13. Final theme & polish
     steps.push(InstallStep::new(
         "fedora_theme",
         "Apply Default Aurora Theme",

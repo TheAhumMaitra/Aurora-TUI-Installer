@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
-use crate::model::config::{Component, InstallConfig, InstallMode};
+use crate::model::config::{Component, InstallConfig, InstallMode, NeovimPreset};
 
 pub const PACMAN_CORE: &[&str] = &[
     "hyprland",
@@ -96,6 +97,51 @@ pub const YAY_AUR_PACKAGES: &[&str] = &[
     "quickshell",
 ];
 
+pub const ARCH_GAMING_PACKAGES: &[&str] = &[
+    "steam",
+    "gamemode",
+    "mangohud",
+    "gamescope",
+];
+
+pub const ARCH_PACKAGE_GROUPS: &[DistroPackageGroup] = &[
+    DistroPackageGroup {
+        category: "Core Compositor",
+        description: "Hyprland compositor, XDG portals, pipewire audio and session manager",
+        packages: PACMAN_CORE,
+    },
+    DistroPackageGroup {
+        category: "Daemons & Lockscreen",
+        description: "Notification center (SwayNC), idle daemon, lockscreen, polkit agent",
+        packages: PACMAN_DAEMONS,
+    },
+    DistroPackageGroup {
+        category: "Bar & UI Components",
+        description: "Waybar status bar, Rofi launcher, GTK3/4 themes, Qt6 wayland libraries",
+        packages: PACMAN_UI,
+    },
+    DistroPackageGroup {
+        category: "Utilities & Terminal",
+        description: "Kitty, Ghostty, Cliphist, Nemo, Hyprshot, Starship, Mise, Nerd fonts",
+        packages: PACMAN_UTILS,
+    },
+    DistroPackageGroup {
+        category: "Build Tools & Compilers",
+        description: "Base development tools, GCC, Clang, CMake, Rust, Cargo, sudo-rs",
+        packages: PACMAN_BUILD,
+    },
+    DistroPackageGroup {
+        category: "AUR Rice Addons",
+        description: "Zen Browser, Nordzy cursors, Quickshell, Snappy Switcher, Weathr",
+        packages: YAY_AUR_PACKAGES,
+    },
+    DistroPackageGroup {
+        category: "Gaming & Performance Suite",
+        description: "Steam client, GameMode optimization daemon, MangoHud FPS overlay",
+        packages: ARCH_GAMING_PACKAGES,
+    },
+];
+
 pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
     let mut steps = Vec::new();
 
@@ -134,7 +180,16 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 4. SDDM Theme
+    // 4. Gaming Suite (if selected)
+    if config.is_component_selected(Component::GamingSuite) {
+        steps.push(InstallStep::new(
+            "arch_gaming",
+            "Install Gaming & Performance Suite",
+            "Install Steam, GameMode optimizer daemon, and MangoHud overlay",
+        ));
+    }
+
+    // 5. SDDM Theme
     if config.is_component_selected(Component::SddmTheme) {
         steps.push(InstallStep::new(
             "arch_sddm",
@@ -143,7 +198,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 5. Rust scripts & tools
+    // 6. Rust scripts & tools
     if config.is_component_selected(Component::RustScripts) {
         steps.push(InstallStep::new(
             "arch_rust_scripts",
@@ -152,7 +207,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 6. Waytrogen-Aurora
+    // 7. Waytrogen-Aurora
     if config.is_component_selected(Component::Waytrogen) {
         steps.push(InstallStep::new(
             "arch_waytrogen",
@@ -161,34 +216,34 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 7. LazyVim
-    if config.is_component_selected(Component::LazyVim) {
+    // 8. Neovim Setup
+    if config.is_component_selected(Component::LazyVim) && config.neovim_preset != NeovimPreset::None {
         steps.push(InstallStep::new(
             "arch_lazyvim",
-            "Deploy LazyVim Neovim Configuration",
-            "Backup existing Neovim configs and deploy modern LazyVim starter setup",
+            format!("Deploy {} Setup", config.neovim_preset.label()),
+            format!("Backup existing Neovim configs and deploy {}", config.neovim_preset.description()),
         ));
     }
 
-    // 8. Dotfiles
+    // 9. Dotfiles
     if config.is_component_selected(Component::Dotfiles) {
         steps.push(InstallStep::new(
             "arch_dotfiles",
             "Deploy Aurora Hyprland Dotfiles",
-            "Backup current configurations and deploy Hyprland, Waybar, SwayNC, Kitty configs",
+            format!("Deploy Hyprland (Animation: {}), Waybar, SwayNC, and terminal configs", config.animation_profile.label()),
         ));
     }
 
-    // 9. Shell & PATH
+    // 10. Shell & PATH
     if config.is_component_selected(Component::ShellConfig) {
         steps.push(InstallStep::new(
             "arch_shell",
-            "Configure Shell & PATH Environment",
+            format!("Configure Shell ({}) & PATH Environment", config.shell_choice.label()),
             "Ensure ~/.cargo/bin and ~/.local/bin are present in shell PATH profiles",
         ));
     }
 
-    // 10. Sudo-rs
+    // 11. Sudo-rs
     if config.is_component_selected(Component::SudoRs) && config.allow_sudo_rs {
         steps.push(InstallStep::new(
             "arch_sudo_rs",
@@ -197,7 +252,7 @@ pub fn build_steps(config: &InstallConfig) -> Vec<InstallStep> {
         ));
     }
 
-    // 11. Final theme & polish
+    // 12. Final theme & polish
     steps.push(InstallStep::new(
         "arch_theme",
         "Apply Default Aurora Theme",

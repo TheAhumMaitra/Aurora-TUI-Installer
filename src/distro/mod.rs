@@ -11,6 +11,13 @@ use std::path::{Path, PathBuf};
 use sysinfo::{Disks, System};
 use which::which;
 
+#[derive(Debug, Clone, Copy)]
+pub struct DistroPackageGroup {
+    pub category: &'static str,
+    pub description: &'static str,
+    pub packages: &'static [&'static str],
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DistroFamily {
     Arch,

@@ -45,6 +45,13 @@ fn render_summary_card(f: &mut Frame, state: &AppState, area: Rect) {
 
     let backup_path = state.config.backup_dir.display().to_string();
 
+    let disabled_cnt = state.config.disabled_packages.len();
+    let pkg_custom_str = if disabled_cnt > 0 {
+        format!("{} components active ({} packages excluded)", state.config.selected_components.len(), disabled_cnt)
+    } else {
+        format!("{} components active (All packages enabled)", state.config.selected_components.len())
+    };
+
     let lines = vec![
         Line::from(vec![
             Span::styled("Target Distro:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
@@ -54,21 +61,28 @@ fn render_summary_card(f: &mut Frame, state: &AppState, area: Rect) {
         Line::from(vec![
             Span::styled("Release Mode:      ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
             Span::styled(mode_str, Style::default().fg(COLOR_TEXT)),
+            Span::raw("  "),
+            Span::styled("Preset: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(state.config.preset.label(), Style::default().fg(COLOR_WHITE)),
         ]),
         Line::from(vec![
-            Span::styled("Preset Profile:    ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled(state.config.preset.label(), Style::default().fg(COLOR_TEXT)),
+            Span::styled("Neovim Preset:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(state.config.neovim_preset.label(), Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+        ]),
+        Line::from(vec![
+            Span::styled("Terminal & Shell:  ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(state.config.terminal_choice.label(), Style::default().fg(COLOR_WHITE)),
+            Span::styled("  •  Shell: ", Style::default().fg(COLOR_DARK)),
+            Span::styled(state.config.shell_choice.label(), Style::default().fg(COLOR_WHITE)),
         ]),
         Line::from(vec![
             Span::styled("Desktop Theme:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
             Span::styled(&state.config.theme_name, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+            Span::styled(format!("  (Animations: {})", state.config.animation_profile.label()), Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
             Span::styled("Selected Modules:  ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled(
-                format!("{} components active", state.config.selected_components.len()),
-                Style::default().fg(COLOR_GREEN),
-            ),
+            Span::styled(pkg_custom_str, Style::default().fg(COLOR_GREEN)),
         ]),
         Line::from(vec![
             Span::styled("Dry-Run Status:    ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
