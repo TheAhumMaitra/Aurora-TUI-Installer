@@ -29,7 +29,7 @@ pub enum DistroFamily {
 impl DistroFamily {
     pub fn name(&self) -> &'static str {
         match self {
-            DistroFamily::Arch => "Arch Linux",
+            DistroFamily::Arch => "Arch Linux & Arch-based",
             DistroFamily::Fedora => "Fedora Linux",
             DistroFamily::NixOS => "NixOS",
             DistroFamily::Unknown => "Unsupported Linux",
@@ -38,13 +38,14 @@ impl DistroFamily {
 
     pub fn package_manager(&self) -> &'static str {
         match self {
-            DistroFamily::Arch => "pacman / yay",
+            DistroFamily::Arch => "pacman / yay / paru",
             DistroFamily::Fedora => "dnf / copr",
             DistroFamily::NixOS => "nix / flakes",
             DistroFamily::Unknown => "unknown",
         }
     }
 
+    #[allow(dead_code)]
     pub fn icon(&self) -> &'static str {
         match self {
             DistroFamily::Arch => "󰣇",
@@ -61,6 +62,10 @@ pub struct DistroInfo {
     pub id: String,
     pub pretty_name: String,
     pub id_like: Vec<String>,
+    pub is_arch_compatible: bool,
+    pub arch_flavor: String,
+    pub aur_helper: Option<String>,
+    pub pacman_available: bool,
     pub kernel: String,
     pub arch: String,
     pub current_user: String,
@@ -78,17 +83,28 @@ impl DistroInfo {
     pub fn detect() -> Self {
         let (id, pretty_name, id_like) = read_os_release();
 
-        let family = if Path::new("/etc/NIXOS").exists()
-            || id == "nixos"
-            || which("nixos-rebuild").is_ok()
-        {
-            DistroFamily::NixOS
-        } else if is_arch_family(&id, &id_like) || which("pacman").is_ok() {
+        let is_arch = is_arch_family(&id, &id_like);
+        let pacman_available = which("pacman").is_ok();
+        let is_arch_compatible = is_arch || pacman_available;
+
+        let family = if is_arch_compatible {
             DistroFamily::Arch
-        } else if is_fedora_family(&id, &id_like) || which("dnf").is_ok() {
+        } else if id == "fedora" || is_fedora_family(&id, &id_like) {
             DistroFamily::Fedora
+        } else if id == "nixos" || Path::new("/etc/NIXOS").exists() {
+            DistroFamily::NixOS
         } else {
             DistroFamily::Unknown
+        };
+
+        let arch_flavor = detect_arch_flavor(&id, &pretty_name, is_arch_compatible);
+
+        let aur_helper = if which("paru").is_ok() {
+            Some("paru".to_string())
+        } else if which("yay").is_ok() {
+            Some("yay".to_string())
+        } else {
+            None
         };
 
         // System specs via sysinfo
@@ -138,6 +154,10 @@ impl DistroInfo {
             id,
             pretty_name,
             id_like,
+            is_arch_compatible,
+            arch_flavor,
+            aur_helper,
+            pacman_available,
             kernel,
             arch,
             current_user,
@@ -151,6 +171,78 @@ impl DistroInfo {
             hyprland_running,
         }
     }
+}
+
+pub fn detect_arch_flavor(id: &str, pretty_name: &str, is_arch_compat: bool) -> String {
+    if !is_arch_compat {
+        return pretty_name.to_string();
+    }
+
+    match id {
+        "cachyos" => "CachyOS Linux".to_string(),
+        "endeavouros" => "EndeavourOS".to_string(),
+        "manjaro" | "manjaro-arm" => "Manjaro Linux".to_string(),
+        "garuda" => "Garuda Linux".to_string(),
+        "arch" | "archlinux" => "Arch Linux (Pure)".to_string(),
+        "archarm" => "Arch Linux ARM".to_string(),
+        "artix" => "Artix Linux".to_string(),
+        "arcolinux" => "ArcoLinux".to_string(),
+        "archcraft" => "Archcraft".to_string(),
+        "blackarch" => "BlackArch Linux".to_string(),
+        "parabola" => "Parabola GNU/Linux-libre".to_string(),
+        "hyperbola" => "Hyperbola GNU/Linux-libre".to_string(),
+        "steamos" => "SteamOS (Arch derivative)".to_string(),
+        _ => {
+            if pretty_name.to_lowercase().contains("arch") {
+                pretty_name.to_string()
+            } else {
+                format!("{pretty_name} (Arch-compatible)")
+            }
+        }
+    }
+}
+
+pub fn is_arch_id(id: &str, id_like: &[String]) -> bool {
+    let arch_ids = [
+        "arch",
+        "archarm",
+        "archlinux",
+        "cachyos",
+        "endeavouros",
+        "manjaro",
+        "manjaro-arm",
+        "garuda",
+        "artix",
+        "arcolinux",
+        "archcraft",
+        "blackarch",
+        "parabola",
+        "hyperbola",
+        "salient",
+        "steamos",
+    ];
+
+    if arch_ids.iter().any(|&candidate| candidate == id) {
+        return true;
+    }
+
+    id_like.iter().any(|like| like == "arch")
+}
+
+pub fn is_arch_family(id: &str, id_like: &[String]) -> bool {
+    is_arch_id(id, id_like) || Path::new("/etc/arch-release").exists() || which("pacman").is_ok()
+}
+
+fn is_fedora_family(id: &str, id_like: &[String]) -> bool {
+    let fedora_ids = ["fedora", "nobara", "bazzite", "ultramarine", "rhel", "centos"];
+
+    if fedora_ids.iter().any(|&candidate| candidate == id) {
+        return true;
+    }
+
+    id_like
+        .iter()
+        .any(|like| like == "fedora" || like == "rhel" || like == "centos")
 }
 
 fn read_os_release() -> (String, String, Vec<String>) {
@@ -189,39 +281,6 @@ fn read_os_release() -> (String, String, Vec<String>) {
     (id, pretty_name, id_like)
 }
 
-fn is_arch_family(id: &str, id_like: &[String]) -> bool {
-    let arch_ids = [
-        "arch",
-        "archarm",
-        "archlinux",
-        "cachyos",
-        "endeavouros",
-        "manjaro",
-        "garuda",
-        "artix",
-        "arcolinux",
-        "archcraft",
-    ];
-
-    if arch_ids.iter().any(|&candidate| candidate == id) {
-        return true;
-    }
-
-    id_like.iter().any(|like| like == "arch")
-}
-
-fn is_fedora_family(id: &str, id_like: &[String]) -> bool {
-    let fedora_ids = ["fedora", "nobara", "bazzite", "ultramarine", "rhel", "centos"];
-
-    if fedora_ids.iter().any(|&candidate| candidate == id) {
-        return true;
-    }
-
-    id_like
-        .iter()
-        .any(|like| like == "fedora" || like == "rhel" || like == "centos")
-}
-
 fn is_current_user_root() -> bool {
     // Check EUID on Unix
     if let Ok(euid) = std::env::var("EUID") {
@@ -236,4 +295,34 @@ fn is_current_user_root() -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_arch_family_detection() {
+        assert!(is_arch_id("arch", &[]));
+        assert!(is_arch_id("cachyos", &["arch".to_string()]));
+        assert!(is_arch_id("endeavouros", &["arch".to_string()]));
+        assert!(is_arch_id("manjaro", &[]));
+        assert!(is_arch_id("garuda", &[]));
+        assert!(is_arch_id("artix", &[]));
+        assert!(is_arch_id("arcolinux", &[]));
+        assert!(is_arch_id("archcraft", &[]));
+        assert!(is_arch_id("steamos", &[]));
+
+        let ubuntu_like = vec!["debian".to_string()];
+        assert!(!is_arch_id("ubuntu", &ubuntu_like));
+        assert!(!is_arch_id("fedora", &[]));
+    }
+
+    #[test]
+    fn test_arch_flavor_names() {
+        assert_eq!(detect_arch_flavor("cachyos", "CachyOS Linux", true), "CachyOS Linux");
+        assert_eq!(detect_arch_flavor("arch", "Arch Linux", true), "Arch Linux (Pure)");
+        assert_eq!(detect_arch_flavor("endeavouros", "EndeavourOS", true), "EndeavourOS");
+        assert_eq!(detect_arch_flavor("garuda", "Garuda Linux", true), "Garuda Linux");
+    }
 }

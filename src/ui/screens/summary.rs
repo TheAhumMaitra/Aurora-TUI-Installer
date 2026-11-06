@@ -54,8 +54,8 @@ fn render_summary_card(f: &mut Frame, state: &AppState, area: Rect) {
 
     let lines = vec![
         Line::from(vec![
-            Span::styled("Target Distro:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled(state.selected_distro.name(), Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD)),
+            Span::styled("Target System:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(&state.distro_info.arch_flavor, Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD)),
             Span::styled(format!(" [{}]", state.selected_distro.package_manager()), Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![

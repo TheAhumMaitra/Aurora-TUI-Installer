@@ -5,16 +5,6 @@ use clap::{Parser, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum DistroArg {
-    #[value(name = "arch", alias = "archlinux")]
-    Arch,
-    #[value(name = "fedora")]
-    Fedora,
-    #[value(name = "nixos", alias = "nix")]
-    NixOS,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
 pub enum ModeArg {
     #[value(name = "stable")]
     Stable,
@@ -66,22 +56,20 @@ pub enum ShellArg {
     Bash,
 }
 
-/// Aurora Universal TUI Installer for Arch Linux, Fedora, and NixOS
+/// Aurora TUI Installer tailored for Arch Linux and Arch-based distributions
 #[derive(Parser, Debug, Clone)]
 #[command(
     name = "aurora-installer",
     author = "Ahum Maitra <theahummaitra@gmail.com>",
     version = "1.0.0",
-    about = "A minimal, elegant, Ratatui-based installer for Aurora (Arch, Fedora, NixOS)",
+    about = "A minimal, elegant, Ratatui-based installer for Aurora (Arch Linux & Arch-based OS)",
     long_about = "Aurora Installer provides a rich, responsive terminal user interface (TUI) \
-                  built on Ratatui to configure and install the Aurora Hyprland rice across \
-                  Arch Linux, Fedora, and NixOS."
+                  built on Ratatui to configure and install the Aurora Hyprland rice. \
+                  Auto-detects Arch Linux and Arch-based distributions (CachyOS, EndeavourOS, \
+                  Manjaro, Garuda, Artix, ArcoLinux, Archcraft, SteamOS) and provides hardware \
+                  and distribution compatibility checks."
 )]
 pub struct CliArgs {
-    /// Force a specific Linux distribution (arch, fedora, nixos) instead of auto-detecting
-    #[arg(short, long, value_enum)]
-    pub distro: Option<DistroArg>,
-
     /// Preview actions and commands without applying any changes
     #[arg(long, default_value_t = false)]
     pub dry_run: bool,

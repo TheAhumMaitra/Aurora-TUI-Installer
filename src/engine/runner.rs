@@ -305,19 +305,25 @@ fn execute_single_step(
             runner.run_command("sudo", &args)
         }
         "arch_aur" => {
-            runner.log_info("Checking for AUR helper (yay)...");
-            if which::which("yay").is_err() && !runner.dry_run {
-                runner.log_info("Bootstrapping yay from AUR...");
-                let _ = runner.run_command("git", &["clone", "https://aur.archlinux.org/yay.git", "/tmp/yay-install"]);
-                let _ = runner.run_command("sh", &["-c", "cd /tmp/yay-install && makepkg -si --noconfirm"]);
-            }
-            runner.log_info("Installing AUR extras...");
+            let aur_bin = if which::which("paru").is_ok() {
+                "paru"
+            } else if which::which("yay").is_ok() {
+                "yay"
+            } else {
+                if !runner.dry_run {
+                    runner.log_info("Bootstrapping yay AUR helper from source...");
+                    let _ = runner.run_command("git", &["clone", "https://aur.archlinux.org/yay-bin.git", "/tmp/yay-install"]);
+                    let _ = runner.run_command("sh", &["-c", "cd /tmp/yay-install && makepkg -si --noconfirm"]);
+                }
+                "yay"
+            };
+            runner.log_info(format!("Using AUR helper ({aur_bin}) for rice extras..."));
             let mut aur_pkgs: Vec<&str> = arch::YAY_AUR_PACKAGES.to_vec();
             aur_pkgs.retain(|&pkg| config.is_package_enabled(pkg));
 
             let mut args = vec!["-S", "--needed", "--noconfirm"];
             args.extend(aur_pkgs);
-            runner.run_command("yay", &args).or_else(|_| {
+            runner.run_command(aur_bin, &args).or_else(|_| {
                 runner.log_warn("Some AUR packages may not have built or are already present");
                 Ok(())
             })

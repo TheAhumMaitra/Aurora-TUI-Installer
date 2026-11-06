@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 use crate::distro::arch::ARCH_PACKAGE_GROUPS;
-use crate::distro::fedora::FEDORA_PACKAGE_GROUPS;
-use crate::distro::nixos::NIXOS_PACKAGE_GROUPS;
-use crate::distro::{DistroFamily, DistroPackageGroup};
+use crate::distro::DistroPackageGroup;
 use crate::model::state::AppState;
 use crate::ui::theme::*;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
@@ -19,12 +17,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
         .split(area);
 
-    let groups = match state.selected_distro {
-        DistroFamily::Arch => ARCH_PACKAGE_GROUPS,
-        DistroFamily::Fedora => FEDORA_PACKAGE_GROUPS,
-        DistroFamily::NixOS => NIXOS_PACKAGE_GROUPS,
-        DistroFamily::Unknown => &[],
-    };
+    let groups = ARCH_PACKAGE_GROUPS;
 
     render_categories(f, state, groups, chunks[0]);
     render_packages(f, state, groups, chunks[1]);

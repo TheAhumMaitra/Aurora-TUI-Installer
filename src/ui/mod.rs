@@ -103,9 +103,8 @@ fn render_header(f: &mut Frame, state: &AppState, area: Rect) {
 fn render_footer(f: &mut Frame, state: &AppState, area: Rect) {
     let keybinds: Vec<(&str, &str)> = match state.current_screen {
         AppScreen::Welcome => vec![
-            ("D", "Switch Target Distro"),
             ("Enter", "Proceed to Configuration"),
-            ("Q", "Quit"),
+            ("Q / Esc", "Quit"),
         ],
         AppScreen::Configuration => vec![
             ("K", "Fine-tune Packages"),

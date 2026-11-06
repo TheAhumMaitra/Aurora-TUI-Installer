@@ -14,7 +14,7 @@
 ```
 
 **A minimal, elegant, Ratatui-based installer for Aurora.**  
-*Supporting Arch Linux, Fedora Linux, and NixOS.*
+*Tailored for Arch Linux & Arch-based distributions.*
 
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/License-GPL--3.0--or--later-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Built with Ratatui](https://img.shields.io/badge/TUI-Ratatui%200.30-cyan.svg)](https://ratatui.rs)
@@ -28,10 +28,30 @@
 
 The **Aurora TUI Installer** (`aurora-installer`) provides a responsive, keyboard-driven terminal user interface built with [Ratatui](https://ratatui.rs) and [Crossterm](https://github.com/crossterm-rs/crossterm).
 
-It automates the complete configuration and setup of **Aurora** (a minimal, elegant Hyprland preconfigured rice) across the three primary supported Linux distributions:
-- **Arch Linux** & derivatives (CachyOS, EndeavourOS, Manjaro, Garuda, ArcoLinux, Archcraft, etc.)
-- **Fedora Linux** & derivatives (Fedora Workstation, Nobara, Bazzite, Ultramarine)
-- **NixOS** (with Flakes and Nix develop shell integration)
+Aurora is tailored for **Arch Linux and all Arch-based distributions** ("ARCHOS based distros"). Manual distribution selection is removed: the installer automatically detects the running operating system and verifies hardware and distribution compatibility on launch:
+- **Pure Arch Linux** (`arch`, `archlinux`)
+- **CachyOS** (Kernel-optimized performance Arch derivative)
+- **EndeavourOS** (Popular desktop Arch derivative)
+- **Manjaro Linux** & **Manjaro ARM**
+- **Garuda Linux** (Gaming and performance oriented)
+- **Artix Linux**
+- **ArcoLinux**
+- **Archcraft**
+- **BlackArch**, **SteamOS**, and any system with `pacman` or `arch` in `ID_LIKE`.
+
+---
+
+## ✦ Automatic Distribution Compatibility & Health Check
+
+Upon launching, the installer automatically validates:
+1. **Arch Ecosystem Compatibility**: Identifies your exact Arch flavor, verifies `pacman` availability, and detects whether an AUR helper (`yay` or `paru`) is installed or needs automatic bootstrapping.
+2. **User Privileges**: Checks standard non-root execution with `sudo` capabilities.
+3. **Storage Requirements**: Verifies available free space in `$HOME` (>= 5 GB recommended).
+4. **Memory & CPU**: Validates logical cores and memory capacity.
+5. **Session Type**: Detects active Wayland / Hyprland sessions.
+6. **Dotfiles Safety**: Protects custom configurations (`~/.config/hypr/User` is always preserved).
+
+If run on an unsupported non-Arch distribution (e.g. Fedora, Ubuntu, Debian), a clear diagnostic card is displayed explaining the requirement for Arch package management (`pacman`/AUR), with live installation restricted to avoid system conflicts while enabling `--dry-run` preview.
 
 ---
 
@@ -119,14 +139,6 @@ Preview the entire installation safely without touching your system:
 ./target/release/aurora-installer --dry-run
 ```
 
-### Forcing a Distribution
-Force target distro rather than relying on auto-detection:
-```bash
-./target/release/aurora-installer --distro arch
-./target/release/aurora-installer --distro fedora
-./target/release/aurora-installer --distro nixos
-```
-
 ### Non-Interactive / Headless Mode
 Automate installation in scripts or CI:
 ```bash
@@ -139,7 +151,6 @@ Automate installation in scripts or CI:
 Usage: aurora-installer [OPTIONS]
 
 Options:
-  -d, --distro <DISTRO>      Force target distribution (arch, fedora, nixos)
       --dry-run              Preview actions without applying changes
   -y, --non-interactive      Run without interactive prompts (headless)
   -m, --mode <MODE>          Select release channel (stable vs git)

@@ -8,13 +8,13 @@ mod model;
 mod ui;
 
 use clap::Parser;
-use cli::{CliArgs, DistroArg, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg};
+use cli::{CliArgs, ModeArg, NeovimArg, PresetArg, ShellArg, TerminalArg};
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use distro::{DistroFamily, DistroInfo};
+use distro::DistroInfo;
 use model::config::{
     Component, InstallConfig, InstallMode, InstallPreset, NeovimPreset, ShellChoice,
     TerminalChoice,
@@ -90,16 +90,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut state = AppState::new(distro_info, config);
 
-    // If explicit distro requested via CLI
-    if let Some(distro_arg) = args.distro {
-        let forced = match distro_arg {
-            DistroArg::Arch => DistroFamily::Arch,
-            DistroArg::Fedora => DistroFamily::Fedora,
-            DistroArg::NixOS => DistroFamily::NixOS,
-        };
-        state.set_distro(forced);
-    }
-
     // Headless / non-interactive execution
     if args.non_interactive {
         run_headless(&mut state);
@@ -129,7 +119,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn run_headless(state: &mut AppState) {
     println!("=== Aurora Non-Interactive Installation ===");
-    println!("Target Distribution: {}", state.selected_distro.name());
+    println!("Detected System:     {}", state.distro_info.arch_flavor);
+    println!(
+        "Arch Compatibility:  {}",
+        if state.distro_info.is_arch_compatible {
+            "Compatible (Arch-based)"
+        } else {
+            "Incompatible (Non-Arch)"
+        }
+    );
+    println!(
+        "Package Manager:     {}",
+        if state.distro_info.pacman_available {
+            "pacman (found)"
+        } else {
+            "none"
+        }
+    );
+    println!(
+        "AUR Helper:          {}",
+        state
+            .distro_info
+            .aur_helper
+            .as_deref()
+            .unwrap_or("none (will bootstrap yay)")
+    );
     println!("Installation Mode:   {:?}", state.config.mode);
     println!("Neovim Preset:       {}", state.config.neovim_preset.label());
     println!("Terminal Choice:     {}", state.config.terminal_choice.label());
@@ -197,9 +211,6 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
 
     match state.current_screen {
         AppScreen::Welcome => match code {
-            KeyCode::Char('d') | KeyCode::Char('D') | KeyCode::Right | KeyCode::Left => {
-                state.cycle_distro();
-            }
             KeyCode::Enter => {
                 state.current_screen = AppScreen::Configuration;
             }
@@ -360,12 +371,7 @@ fn handle_key_event(state: &mut AppState, code: KeyCode, modifiers: KeyModifiers
         },
 
         AppScreen::PackageSelection => {
-            let groups: &[distro::DistroPackageGroup] = match state.selected_distro {
-                DistroFamily::Arch => distro::arch::ARCH_PACKAGE_GROUPS,
-                DistroFamily::Fedora => distro::fedora::FEDORA_PACKAGE_GROUPS,
-                DistroFamily::NixOS => distro::nixos::NIXOS_PACKAGE_GROUPS,
-                DistroFamily::Unknown => &[],
-            };
+            let groups = distro::arch::ARCH_PACKAGE_GROUPS;
             let total_cats = groups.len();
 
             match code {

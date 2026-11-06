@@ -31,7 +31,7 @@ impl AppScreen {
 
     pub fn title(&self) -> &'static str {
         match self {
-            AppScreen::Welcome => "1. Welcome & Distro",
+            AppScreen::Welcome => "1. Welcome & Compatibility",
             AppScreen::Configuration => "2. Configuration",
             AppScreen::PackageSelection => "2b. Packages",
             AppScreen::Summary => "3. Review",
@@ -116,27 +116,22 @@ impl AppState {
     }
 
     pub fn refresh_steps(&mut self) {
-        self.steps = match self.selected_distro {
-            DistroFamily::Arch => arch::build_steps(&self.config),
-            DistroFamily::Fedora => fedora::build_steps(&self.config),
-            DistroFamily::NixOS => nixos::build_steps(&self.config),
-            DistroFamily::Unknown => Vec::new(),
+        self.steps = if self.distro_info.is_arch_compatible || self.selected_distro == DistroFamily::Arch {
+            arch::build_steps(&self.config)
+        } else {
+            match self.selected_distro {
+                DistroFamily::Arch => arch::build_steps(&self.config),
+                DistroFamily::Fedora => fedora::build_steps(&self.config),
+                DistroFamily::NixOS => nixos::build_steps(&self.config),
+                DistroFamily::Unknown => Vec::new(),
+            }
         };
     }
 
+    #[allow(dead_code)]
     pub fn set_distro(&mut self, distro: DistroFamily) {
         self.selected_distro = distro;
         self.refresh_steps();
-    }
-
-    pub fn cycle_distro(&mut self) {
-        let next = match self.selected_distro {
-            DistroFamily::Arch => DistroFamily::Fedora,
-            DistroFamily::Fedora => DistroFamily::NixOS,
-            DistroFamily::NixOS => DistroFamily::Arch,
-            DistroFamily::Unknown => DistroFamily::Arch,
-        };
-        self.set_distro(next);
     }
 
     pub fn start_installation(&mut self) {

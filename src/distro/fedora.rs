@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+#![allow(dead_code)]
+
 use crate::distro::DistroPackageGroup;
 use crate::engine::step::InstallStep;
 use crate::model::config::{Component, InstallConfig, NeovimPreset};

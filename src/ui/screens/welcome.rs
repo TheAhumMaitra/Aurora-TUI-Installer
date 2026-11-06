@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Ahum Maitra <theahummaitra@gmail.com>
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-use crate::distro::DistroFamily;
 use crate::model::state::AppState;
 use crate::ui::theme::*;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
@@ -27,7 +26,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .split(area);
 
-    // Left pane: Logo & Distro Selection
+    // Left pane: Logo & ArchOS Compatibility Verification
     render_left_pane(f, state, chunks[0]);
 
     // Right pane: System Diagnostics Card
@@ -44,10 +43,10 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(10), // Logo
-            Constraint::Length(4),  // Description
-            Constraint::Length(6),  // Distro Selector
-            Constraint::Min(2),     // Notice
+            Constraint::Length(9),  // Logo
+            Constraint::Length(3),  // Subtitle
+            Constraint::Min(8),     // ArchOS Compatibility Card
+            Constraint::Length(3),  // Action notice
         ])
         .split(inner);
 
@@ -76,67 +75,110 @@ fn render_left_pane(f: &mut Frame, state: &AppState, area: Rect) {
             Span::styled("• A minimal, elegant Hyprland rice", Style::default().fg(COLOR_WHITE)),
         ]),
         Line::from(Span::styled(
-            "Unified Ratatui Installer supporting Arch Linux, Fedora, and NixOS.",
+            "Tailored exclusively for Arch Linux & Arch-based distributions.",
             Style::default().fg(COLOR_DARK),
         )),
     ])
     .alignment(Alignment::Center);
     f.render_widget(desc_p, chunks[1]);
 
-    // Distro Selector Box
-    let arch_selected = state.selected_distro == DistroFamily::Arch;
-    let fedora_selected = state.selected_distro == DistroFamily::Fedora;
-    let nixos_selected = state.selected_distro == DistroFamily::NixOS;
-
-    let pill = |name: String, selected: bool| -> Span {
-        if selected {
-            Span::styled(
-                format!("  ▶ {} ◀  ", name),
-                Style::default()
-                    .fg(COLOR_WHITE)
-                    .bg(COLOR_BLUE)
-                    .add_modifier(Modifier::BOLD),
-            )
-        } else {
-            Span::styled(
-                format!("    {}    ", name),
-                Style::default().fg(COLOR_DARK),
-            )
-        }
+    // Distribution Compatibility Verification Box
+    let info = &state.distro_info;
+    let card_block = if info.is_arch_compatible {
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(COLOR_GREEN))
+            .title(" 󰣇 System Compatibility Verification ")
+            .title_style(Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD))
+            .padding(Padding::uniform(1))
+    } else {
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(COLOR_RED))
+            .title(" ▲ Distribution Compatibility Warning ")
+            .title_style(Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD))
+            .padding(Padding::uniform(1))
     };
 
-    let selector_lines = vec![
-        Line::from(vec![
-            Span::styled("TARGET DISTRIBUTION: ", Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD)),
-            Span::styled("(Press [D] to cycle)", Style::default().fg(COLOR_DARK)),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            pill(format!("{} Arch Linux", DistroFamily::Arch.icon()), arch_selected),
-            Span::raw(" "),
-            pill(format!("{} Fedora Linux", DistroFamily::Fedora.icon()), fedora_selected),
-            Span::raw(" "),
-            pill(format!("{} NixOS", DistroFamily::NixOS.icon()), nixos_selected),
-        ]),
-    ];
+    let card_lines = if info.is_arch_compatible {
+        vec![
+            Line::from(vec![
+                Span::styled(" ✔ ARCH-BASED SYSTEM VERIFIED ", Style::default().fg(COLOR_WHITE).bg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+                Span::styled("Comfortable & Optimal", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Distribution:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+                Span::styled(&info.arch_flavor, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" [ID: {}]", info.id), Style::default().fg(COLOR_DARK)),
+            ]),
+            Line::from(vec![
+                Span::styled("Package Manager:  ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    if info.pacman_available { "pacman (ready)" } else { "pacman (required)" },
+                    Style::default().fg(COLOR_GREEN),
+                ),
+                Span::raw("  •  AUR Helper: "),
+                Span::styled(
+                    match &info.aur_helper {
+                        Some(h) => format!("{} (ready)", h),
+                        None => "yay (auto-bootstrapped)".to_string(),
+                    },
+                    Style::default().fg(COLOR_YELLOW),
+                ),
+            ]),
+            Line::from(vec![
+                Span::styled("Rice Support:     ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+                Span::styled("Hyprland, Waybar, SwayNC, Quickshell & SDDM fully mapped", Style::default().fg(COLOR_TEXT)),
+            ]),
+            Line::from(vec![
+                Span::styled("Safety Assurance: ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+                Span::styled("~/.config/hypr/User custom dotfiles are preserved", Style::default().fg(COLOR_GREEN)),
+            ]),
+        ]
+    } else {
+        vec![
+            Line::from(vec![
+                Span::styled(" ✖ NON-ARCH DISTRIBUTION DETECTED ", Style::default().fg(COLOR_WHITE).bg(COLOR_RED).add_modifier(Modifier::BOLD)),
+                Span::raw(" "),
+                Span::styled("Incompatible", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+            ]),
+            Line::from(""),
+            Line::from(vec![
+                Span::styled("Detected OS:     ", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
+                Span::styled(&info.pretty_name, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" [ID: {}]", info.id), Style::default().fg(COLOR_DARK)),
+            ]),
+            Line::from(vec![
+                Span::styled("Notice:          ", Style::default().fg(COLOR_RED).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    "Aurora is crafted specifically for Arch Linux and Arch derivatives.",
+                    Style::default().fg(COLOR_TEXT),
+                ),
+            ]),
+            Line::from(Span::styled(
+                "Packages, AUR dependencies, and services require pacman/yay. Use Dry-Run to simulate.",
+                Style::default().fg(COLOR_DARK),
+            )),
+        ]
+    };
 
-    let selector_p = Paragraph::new(selector_lines)
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(COLOR_DARK)),
-        );
-    f.render_widget(selector_p, chunks[2]);
+    let card_p = Paragraph::new(card_lines).block(card_block);
+    f.render_widget(card_p, chunks[2]);
 
-    // Notice
+    // Notice & Next Action
     let notice = Paragraph::new(vec![
-        Line::from(""),
+        Line::from(vec![
+            Span::styled("➜ Press ", Style::default().fg(COLOR_DARK)),
+            Span::styled("[ Enter ]", Style::default().fg(COLOR_GREEN).add_modifier(Modifier::BOLD)),
+            Span::styled(" to customize components, Neovim presets, and themes", Style::default().fg(COLOR_WHITE)),
+        ]),
         Line::from(vec![
             Span::styled("💡 Tip: ", Style::default().fg(COLOR_YELLOW).add_modifier(Modifier::BOLD)),
             Span::styled(
-                "You can test the entire workflow safely using Dry-Run Mode on the next screen.",
-                Style::default().fg(COLOR_TEXT),
+                "Dry-run simulation is available anytime to test the entire installation safely.",
+                Style::default().fg(COLOR_DARK),
             ),
         ]),
     ]);
@@ -187,16 +229,27 @@ fn render_right_pane(f: &mut Frame, state: &AppState, area: Rect) {
         Span::styled(" Not running (Headless / TTY / Other)", Style::default().fg(COLOR_DARK))
     };
 
+    let aur_status = match &info.aur_helper {
+        Some(h) => Span::styled(format!(" ✓ Found ({})", h), Style::default().fg(COLOR_GREEN)),
+        None => Span::styled(" ▲ Not found (yay will be bootstrapped)", Style::default().fg(COLOR_YELLOW)),
+    };
+
     let diag_lines = vec![
         Line::from(vec![
             Span::styled("Detected OS:        ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled(&info.pretty_name, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
+            Span::styled(&info.arch_flavor, Style::default().fg(COLOR_WHITE).add_modifier(Modifier::BOLD)),
             Span::styled(format!(" (ID: {})", info.id), Style::default().fg(COLOR_DARK)),
         ]),
         Line::from(vec![
-            Span::styled("Distro Family:      ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
-            Span::styled(info.family.name(), Style::default().fg(COLOR_MAGENTA).add_modifier(Modifier::BOLD)),
-            Span::styled(format!(" [{}]", info.family.package_manager()), Style::default().fg(COLOR_DARK)),
+            Span::styled("Ecosystem:          ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                if info.is_arch_compatible { "Arch Linux & Arch Derivatives" } else { "Unsupported Non-Arch System" },
+                Style::default().fg(if info.is_arch_compatible { COLOR_GREEN } else { COLOR_RED }).add_modifier(Modifier::BOLD),
+            ),
+        ]),
+        Line::from(vec![
+            Span::styled("AUR Helper:         ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
+            aur_status,
         ]),
         Line::from(vec![
             Span::styled("Kernel & Arch:      ", Style::default().fg(COLOR_CYAN).add_modifier(Modifier::BOLD)),
